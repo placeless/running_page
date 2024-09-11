@@ -25,21 +25,23 @@ const YearStat = ({ year, onClick }: { year: string, onClick: (_year: string) =>
   let totalMetersAvail = 0;
   let totalSecondsAvail = 0;
   runs.forEach((run) => {
-    sumDistance += run.distance || 0;
-    if (run.average_speed) {
-      pace += run.average_speed;
-      totalMetersAvail += run.distance || 0;
-      totalSecondsAvail += (run.distance || 0) / run.average_speed;
-    } else {
-      paceNullCount++;
-    }
-    if (run.average_heartrate) {
-      heartRate += run.average_heartrate;
-    } else {
-      heartRateNullCount++;
-    }
-    if (run.streak) {
-      streak = Math.max(streak, run.streak);
+    if (run.type === "Run") {
+      sumDistance += run.distance || 0;
+      if (run.average_speed) {
+        pace += run.average_speed;
+        totalMetersAvail += run.distance || 0;
+        totalSecondsAvail += (run.distance || 0) / run.average_speed;
+      } else {
+        paceNullCount++;
+      }
+      if (run.average_heartrate) {
+        heartRate += run.average_heartrate;
+      } else {
+        heartRateNullCount++;
+      }
+      if (run.streak) {
+        streak = Math.max(streak, run.streak);
+      }
     }
   });
   sumDistance = parseFloat((sumDistance / 1000.0).toFixed(1));
