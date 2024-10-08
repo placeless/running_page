@@ -10,7 +10,7 @@ interface ISiteMetadataResult {
 }
 
 const data: ISiteMetadataResult = {
-  siteTitle: 'Running Page',
+  siteTitle: 'Keep Running',
   siteUrl: 'https://m.placeless.net',
   logo: 'https://avatars.githubusercontent.com/u/1621819?v=4',
   description: 'Personal site and blog',
