@@ -38,7 +38,7 @@ const ROAD_LABEL_DISPLAY = true;
 //set to `true` if you want to display only the routes without showing the map.
 const PRIVACY_MODE = false;
 //set to `false` if you want to make light off as default, only effect when `PRIVACY_MODE` = false
-const LIGHTS_ON = true;
+const LIGHTS_ON = false;
 
 // IF you outside China please make sure IS_CHINESE = false
 const IS_CHINESE = false;

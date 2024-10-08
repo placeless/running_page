@@ -6,16 +6,25 @@ import useHover from '@/hooks/useHover';
 import { yearStats } from '@assets/index';
 import { loadSvgComponent } from '@/utils/svgUtils';
 
-const YearStat = ({ year, onClick }: { year: string, onClick: (_year: string) => void }) => {
-  let { activities: runs, years } = useActivities();
+const YearStat = ({
+  year,
+  onClick,
+}: {
+  year: string;
+  onClick: (_year: string) => void;
+}) => {
+  let { activities: workouts, years } = useActivities();
   // for hover
   const [hovered, eventHandlers] = useHover();
   // lazy Component
   const YearSVG = lazy(() => loadSvgComponent(yearStats, `./year_${year}.svg`));
 
   if (years.includes(year)) {
-    runs = runs.filter((run) => run.start_date_local.slice(0, 4) === year);
+    workouts = workouts.filter(
+      (wo) => wo.start_date_local.slice(0, 4) === year
+    );
   }
+  let runs = workouts.filter((wo) => wo.type === 'Run');
   let sumDistance = 0;
   let streak = 0;
   let pace = 0; // eslint-disable-line no-unused-vars
@@ -25,23 +34,21 @@ const YearStat = ({ year, onClick }: { year: string, onClick: (_year: string) =>
   let totalMetersAvail = 0;
   let totalSecondsAvail = 0;
   runs.forEach((run) => {
-    if (run.type === "Run") {
-      sumDistance += run.distance || 0;
-      if (run.average_speed) {
-        pace += run.average_speed;
-        totalMetersAvail += run.distance || 0;
-        totalSecondsAvail += (run.distance || 0) / run.average_speed;
-      } else {
-        paceNullCount++;
-      }
-      if (run.average_heartrate) {
-        heartRate += run.average_heartrate;
-      } else {
-        heartRateNullCount++;
-      }
-      if (run.streak) {
-        streak = Math.max(streak, run.streak);
-      }
+    sumDistance += run.distance || 0;
+    if (run.average_speed) {
+      pace += run.average_speed;
+      totalMetersAvail += run.distance || 0;
+      totalSecondsAvail += (run.distance || 0) / run.average_speed;
+    } else {
+      paceNullCount++;
+    }
+    if (run.average_heartrate) {
+      heartRate += run.average_heartrate;
+    } else {
+      heartRateNullCount++;
+    }
+    if (run.streak) {
+      streak = Math.max(streak, run.streak);
     }
   });
   sumDistance = parseFloat((sumDistance / 1000.0).toFixed(1));
@@ -58,6 +65,9 @@ const YearStat = ({ year, onClick }: { year: string, onClick: (_year: string) =>
     >
       <section>
         <Stat value={year} description=" Journey" />
+        {workouts.length > runs.length && (
+          <Stat value={workouts.length} description=" Workouts" />
+        )}
         <Stat value={runs.length} description=" Runs" />
         <Stat value={sumDistance} description=" KM" />
         <Stat value={avgPace} description=" Avg Pace" />
