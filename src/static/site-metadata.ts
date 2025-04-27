@@ -9,12 +9,21 @@ interface ISiteMetadataResult {
   }[];
 }
 
+const getBasePath = () => {
+  const baseUrl = import.meta.env.BASE_URL;
+  return baseUrl === '/' ? '' : baseUrl;
+};
+
 const data: ISiteMetadataResult = {
   siteTitle: 'Keep Running',
   siteUrl: 'https://m.placeless.net',
   logo: 'https://avatars.githubusercontent.com/u/1621819?v=4',
   description: 'Personal site and blog',
   navLinks: [
+    {
+      name: 'Summary',
+      url: `${getBasePath()}/summary`,
+    },
     {
       name: 'Blog',
       url: 'https://placeless.net',
