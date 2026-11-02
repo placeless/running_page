@@ -2,3 +2,4 @@
 # Ci
 black
 pytest>=8,<10
+textual>=8,<9
