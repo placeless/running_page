@@ -27,10 +27,16 @@ jobs:
         run: |
           pip install -r requirements-dev.txt
 
-      - name: Run GPX sync test
+      - name: Run offline regression tests
         run: |
-          # make sure the gpx_sync.py script is executable
-          python run_page/gpx_sync.py
+          # Public CI must never import raw GPS or generate a database.
+          python -m pytest -q \
+            test_privacy_export.py \
+            test_generator.py \
+            test_geography.py \
+            test_coros_sync.py \
+            test_strava_sync_errors.py \
+            test_tui_app.py
 
       - name: Check formatting (black)
         run: black . --diff --color && black . --check
