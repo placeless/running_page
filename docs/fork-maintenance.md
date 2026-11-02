@@ -36,11 +36,75 @@ yearly statistics, map rendering and the generated activity data.
 
 The fork defaults to `classic` so an upstream theme redesign does not
 silently replace the deployed experience. Change `theme_preset` in
-`config.yml` deliberately. The Mapbox public token is in that file; restrict
-its allowed origins in the Mapbox dashboard or supply `VITE_MAPBOX_TOKEN`
-at build time.
+`config.yml` deliberately. `config.yml` deliberately contains **no** Mapbox
+token: supply `VITE_MAPBOX_TOKEN` in the frontend build environment instead.
+GitHub Actions builds can obtain it from the `MAPBOX_TOKEN` repository secret;
+Cloudflare builds require that environment variable to be configured **in
+Cloudflare separately**. Restrict the token's allowed origins in Mapbox.
 
-## Run Data Sync: Strava 403 / Application Inactive
+## Run Data Sync: COROS (November 2026 cutover)
+
+The fork uses the upstream COROS Training Hub downloader, **not** the Strava
+API. `.github/workflows/run_data_sync.yml` selects `RUN_TYPE: coros`; its
+scheduled run remains daily. The downloader fetches FIT recordings and merges
+them into `run_page/data.db` and `src/static/activities.json`, which the
+Cloudflare-hosted frontend consumes after its existing Git deployment rebuild.
+No Cloudflare Worker, D1 database, Strava subscription or Strava OAuth token is
+needed to perform this sync.
+
+### One-time setup (GitHub)
+
+In the **placeless/running_page** repository, go to **Settings → Secrets and
+variables → Actions → New repository secret** and create:
+
+- `COROS_ACCOUNT`: COROS Training Hub login (email/account).
+- `COROS_PASSWORD`: your COROS account's **raw password**. The Python script
+  performs COROS's expected MD5 conversion locally before calling its login
+  endpoint. Do not pre-hash the secret.
+
+Credentials must be GitHub Actions Secrets, not checked into the repository,
+not stored in `config.yml`, and not supplied as shell command arguments in
+CI. You can run locally without exposing the password in shell history:
+
+```sh
+read -r COROS_ACCOUNT
+read -rs COROS_PASSWORD; echo
+export COROS_ACCOUNT COROS_PASSWORD
+python run_page/coros_sync.py --since 2026-06-30
+unset COROS_ACCOUNT COROS_PASSWORD
+```
+
+The local database currently contains **861** Strava activities (836 with
+positive distance appear in the frontend JSON). Its last activity starts on
+**2026-06-29**. The `COROS_SYNC_SINCE: '2026-06-30'` cutoff deliberately prevents
+duplicate activities from different providers' unrelated IDs. To backfill
+earlier dates, first develop and validate a cross-provider deduplication plan;
+simply removing `--since` will double-count some workouts. FIT exports are
+cached in `FIT_OUT/` to avoid re-downloading known IDs.
+
+The upstream downloader uses undocumented Training Hub endpoints. This fork
+checks the EU, global and CN region hosts by probing authenticated activity
+access rather than assuming the region from successful login alone. Any
+unrecognized activity-list response or download transport failure fails the
+workflow instead of publishing an apparently successful but empty sync.
+Individual activities without an available FIT export are reported/skipped.
+
+### Activate and verify
+
+Merge the maintenance branch to **master** and create both secrets before
+running **Actions → Run Data Sync → Run workflow** on `master`. Check that the
+COROS region is selected, activities are downloaded, and a new run exists in
+the output without duplicates around the cutoff. The workflow commits data to
+the repository if it changed; the GitHub-connected Cloudflare deployment
+should then rebuild with the updated `src/static/activities.json`.
+
+Unchanged stats after a successful run may mean the COROS account has no
+activity at/after the cutoff, the new sport has no FIT export, or deployment
+did not pick up the committed data. Check the action log and generated JSON
+before changing the cutoff. Keep the old Strava secrets until the COROS
+integration has been validated; they are unused in the COROS branch.
+
+### Historical incident: Strava 403 / Application Inactive
 
 The 2026-11-02 workflow failed while fetching activities:
 
@@ -73,8 +137,8 @@ unattended.
 
 Do not disable workflow failures with `continue-on-error`: a successful
 sync run must mean that its selected data source actually succeeded.
-Scheduled runs will continue failing until the external application is
-reactivated or the configured source is changed.
+Scheduled runs failed while `RUN_TYPE: strava` remained selected. With COROS
+selected, this no longer blocks new activity imports.
 
 References:
 

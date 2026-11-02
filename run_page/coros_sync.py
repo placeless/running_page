@@ -3,6 +3,7 @@ import asyncio
 import hashlib
 import os
 import time
+from datetime import UTC, date, datetime
 
 import aiofiles
 import httpx
@@ -10,11 +11,7 @@ from config import FOLDER_DICT, JSON_FILE, SQL_FILE
 
 from utils import make_activities_file
 
-COROS_URL_DICT = {
-    "LOGIN_URL": "https://teamcnapi.coros.com/account/login",
-    "DOWNLOAD_URL": "https://teamcnapi.coros.com/activity/detail/download",
-    "ACTIVITY_LIST": "https://teamcnapi.coros.com/activity/query",
-}
+COROS_API_HOSTS = ("teameuapi.coros.com", "teamapi.coros.com", "teamcnapi.coros.com")
 
 COROS_TYPE_DICT = {
     "gpx": 1,
@@ -30,13 +27,13 @@ class Coros:
     def __init__(self, account, password, is_only_running=False):
         self.account = account
         self.password = password
+        self.is_only_running = is_only_running
         self.headers = None
         self.req = None
+        self.base_url = None
 
     async def login(self):
-        url = COROS_URL_DICT.get("LOGIN_URL")
         headers = {
-            "authority": "teamcnapi.coros.com",
             "accept": "application/json, text/plain, */*",
             "accept-language": "zh-CN,zh;q=0.9",
             "content-type": "application/json;charset=UTF-8",
@@ -53,20 +50,51 @@ class Coros:
         }
         data = {"account": self.account, "accountType": 2, "pwd": self.password}
         async with httpx.AsyncClient(timeout=TIME_OUT) as client:
-            response = await client.post(url, json=data, headers=headers)
-            resp_json = response.json()
-            access_token = resp_json.get("data", {}).get("accessToken")
-            if not access_token:
-                raise Exception(  # noqa: TRY002
-                    "============Login failed! please check your account and password==========="
-                )
-            self.headers = {
-                "accesstoken": access_token,
-                "cookie": f"CPL-coros-region=2; CPL-coros-token={access_token}",
-            }
-            self.is_only_running = is_only_running
-            self.req = httpx.AsyncClient(timeout=TIME_OUT, headers=self.headers)
-        await client.aclose()
+            for host in COROS_API_HOSTS:
+                base_url = f"https://{host}"
+                try:
+                    response = await client.post(
+                        f"{base_url}/account/login", json=data, headers=headers
+                    )
+                    response.raise_for_status()
+                    access_token = (response.json().get("data") or {}).get(
+                        "accessToken"
+                    )
+                    if not access_token:
+                        continue
+                    auth_headers = {
+                        "accesstoken": access_token,
+                        "cookie": f"CPL-coros-region=2; CPL-coros-token={access_token}",
+                    }
+                    # A login token from the wrong region can be accepted but
+                    # rejected by subsequent activity requests (COROS 1019).
+                    probe = await client.get(
+                        f"{base_url}/activity/query",
+                        params={"pageNumber": 1, "size": 1},
+                        headers=auth_headers,
+                    )
+                    probe.raise_for_status()
+                    payload = probe.json()
+                    if payload.get("result") not in (None, 0, "0", "0000"):
+                        continue
+                    if not isinstance(payload.get("data"), dict):
+                        continue
+                    if not any(
+                        key in payload["data"]
+                        for key in ("dataList", "count", "totalPage")
+                    ):
+                        continue
+                    self.base_url = base_url
+                    self.headers = auth_headers
+                    self.req = httpx.AsyncClient(timeout=TIME_OUT, headers=auth_headers)
+                    print(f"COROS activity API region: {host}")
+                    return
+                except (httpx.HTTPError, ValueError, TypeError):
+                    continue
+        raise RuntimeError(
+            "COROS authentication/activity access failed in every region. "
+            "Check COROS_ACCOUNT and COROS_PASSWORD (and account MFA/region)."
+        )
 
     async def init(self):
         await self.login()
@@ -77,18 +105,33 @@ class Coros:
 
         mode_list_str = "100,101,102,103" if only_run else ""
         while True:
-            url = f"{COROS_URL_DICT.get('ACTIVITY_LIST')}?&modeList={mode_list_str}&pageNumber={page_number}&size=20"
-            response = await self.req.get(url)
+            url = f"{self.base_url}/activity/query"
+            response = await self.req.get(
+                url,
+                params={
+                    "modeList": mode_list_str,
+                    "pageNumber": page_number,
+                    "size": 20,
+                },
+            )
+            response.raise_for_status()
             data = response.json()
-            activities = data.get("data", {}).get("dataList", None)
+            page = data.get("data")
+            if data.get("result") not in (None, 0, "0", "0000") or not isinstance(
+                page, dict
+            ):
+                raise RuntimeError("COROS activity query failed; refusing empty sync")
+            activities = page.get("dataList")
+            if activities is None and page.get("count") != 0:
+                raise RuntimeError("COROS returned an unexpected activity list")
             if not activities:
                 break
             for activity in activities:
                 label_id = activity["labelId"]
-                sport_type = activity["sportType"]
+                activity["sportType"]
                 if label_id is None:
                     continue
-                all_activities_ids_types.append([label_id, sport_type])
+                all_activities_ids_types.append(activity)
 
             page_number += 1
 
@@ -102,7 +145,7 @@ class Coros:
             return None, None
         download_folder = FOLDER_DICT[file_type]
         download_url = (
-            f"{COROS_URL_DICT.get('DOWNLOAD_URL')}?labelId={label_id}&sportType={sport_type}"
+            f"{self.base_url}/activity/detail/download?labelId={label_id}&sportType={sport_type}"
             f"&fileType={COROS_TYPE_DICT[file_type]}"
         )
         file_url = None
@@ -110,13 +153,16 @@ class Coros:
         file_path = ""
         try:
             response = await self.req.post(download_url)
+            response.raise_for_status()
             resp_json = response.json()
             file_url = resp_json.get("data", {}).get("fileUrl")
             if not file_url:
                 print(f"No file URL found for label_id {label_id}")
                 return None, None
 
-            fname = os.path.basename(file_url)
+            # Use the stable COROS activity ID rather than a signed URL's
+            # basename (which can vary and may contain sensitive query data).
+            fname = f"{int(label_id)}.{file_type}"
             file_path = os.path.join(download_folder, fname)
 
             async with self.req.stream("GET", file_url) as response:
@@ -125,49 +171,74 @@ class Coros:
                     async for chunk in response.aiter_bytes():
                         await f.write(chunk)
             return label_id, fname
-        except httpx.HTTPStatusError as exc:
-            print(
-                f"Failed to download {file_url} with status code {response.status_code}: {exc}"
-            )
-        except Exception as exc:  # noqa: BLE001
-            print(f"Error occurred while downloading {file_url}: {exc}")
-        if file_path and os.path.exists(file_path):
-            print(f"Delete the corrupted fit file: {fname}")
-            os.remove(file_path)
+        except Exception:
+            if file_path and os.path.exists(file_path):
+                os.remove(file_path)
+            raise
 
-        return None, None
+
+def activity_date(activity):
+    """Read the COROS list timestamp, without relying on the export filename."""
+    value = activity.get("startTime")
+    if value is None:
+        raise ValueError("COROS activity has no startTime; cannot enforce --since")
+    if isinstance(value, (int, float)) or (isinstance(value, str) and value.isdigit()):
+        value = int(value)
+        if 10_000_000 <= value <= 99_999_999:
+            return datetime.strptime(str(value), "%Y%m%d").date()
+        return datetime.fromtimestamp(
+            value / 1000 if value > 100_000_000_000 else value,
+            tz=UTC,
+        ).date()
+    return datetime.fromisoformat(str(value)).date()
 
 
 def get_downloaded_ids(folder):
-    return [i.split(".")[0] for i in os.listdir(folder) if not i.startswith(".")]
+    return {os.path.splitext(i)[0] for i in os.listdir(folder) if not i.startswith(".")}
 
 
-async def download_and_generate(account, password, only_run, file_type):
+async def download_and_generate(account, password, only_run, file_type, since=None):
     folder = FOLDER_DICT[file_type]
     downloaded_ids = get_downloaded_ids(folder)
     coros = Coros(account, password)
     await coros.init()
-    activity_infos = await coros.fetch_activity_ids_types(only_run=only_run)
-    activity_ids = [i[0] for i in activity_infos]
-    activity_types = [i[1] for i in activity_infos]
-    activity_id_type_dict = dict(zip(activity_ids, activity_types))
-    print("activity_ids: ", len(activity_ids))
-    print("downloaded_ids: ", len(downloaded_ids))
-    to_generate_coros_ids = list(set(activity_ids) - set(downloaded_ids))
-    print("to_generate_activity_ids: ", len(to_generate_coros_ids))
+    try:
+        activity_infos = await coros.fetch_activity_ids_types(only_run=only_run)
+        if since is not None:
+            activity_infos = [
+                activity
+                for activity in activity_infos
+                if activity_date(activity) >= since
+            ]
+        activity_id_type_dict = {
+            str(activity["labelId"]): activity["sportType"]
+            for activity in activity_infos
+        }
+        print("activity_ids: ", len(activity_id_type_dict))
+        print("downloaded_ids: ", len(downloaded_ids))
+        to_generate_coros_ids = sorted(activity_id_type_dict.keys() - downloaded_ids)
+        print("to_generate_activity_ids: ", len(to_generate_coros_ids))
 
-    start_time = time.time()
-    await gather_with_concurrency(
-        10,
-        [
-            coros.download_activity(
-                label_id, activity_id_type_dict[label_id], file_type
-            )
-            for label_id in to_generate_coros_ids
-        ],
-    )
-    print(f"Download finished. Elapsed {time.time()-start_time} seconds")
-    await coros.req.aclose()
+        start_time = time.time()
+        results = await gather_with_concurrency(
+            10,
+            [
+                coros.download_activity(
+                    label_id, activity_id_type_dict[label_id], file_type
+                )
+                for label_id in to_generate_coros_ids
+            ],
+        )
+        print(f"Download finished. Elapsed {time.time() - start_time} seconds")
+    finally:
+        await coros.req.aclose()
+    skipped = sum(result == (None, None) for result in results)
+    if skipped:
+        print(
+            f"COROS exports unavailable for {skipped} activities (unsupported mode/format)"
+        )
+    if to_generate_coros_ids and skipped == len(to_generate_coros_ids):
+        raise RuntimeError("COROS returned no usable exports for new activities")
     make_activities_file(SQL_FILE, folder, JSON_FILE, file_type)
 
 
@@ -183,9 +254,19 @@ async def gather_with_concurrency(n, tasks):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("account", nargs="?", help="input coros account")
+    parser.add_argument(
+        "account", nargs="?", help="COROS account (or COROS_ACCOUNT env)"
+    )
 
-    parser.add_argument("password", nargs="?", help="input coros password")
+    parser.add_argument(
+        "password", nargs="?", help="COROS password (or COROS_PASSWORD env)"
+    )
+    parser.add_argument(
+        "--since",
+        type=date.fromisoformat,
+        metavar="YYYY-MM-DD",
+        help="only import activities on/after this date (preserve prior sources)",
+    )
 
     parser.add_argument(
         "--only-run",
@@ -212,13 +293,17 @@ if __name__ == "__main__":
     )
     options = parser.parse_args()
 
-    account = options.account
-    password = options.password
+    account = options.account or os.getenv("COROS_ACCOUNT")
+    password = options.password or os.getenv("COROS_PASSWORD")
+    if not account or not password:
+        parser.error("set COROS_ACCOUNT and COROS_PASSWORD as secrets")
     is_only_running = options.only_run
     file_type = options.download_file_type
     file_type = file_type if file_type in ["gpx", "tcx", "fit"] else "fit"
     encrypted_pwd = hashlib.md5(password.encode()).hexdigest()
 
     asyncio.run(
-        download_and_generate(account, encrypted_pwd, is_only_running, file_type)
+        download_and_generate(
+            account, encrypted_pwd, is_only_running, file_type, options.since
+        )
     )

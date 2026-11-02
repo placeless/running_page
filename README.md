@@ -1,5 +1,5 @@
 > **Maintaining this fork:** Upstream merges, personal data preservation and
-> Strava API sync troubleshooting are documented in
+> COROS sync setup, data-source cutover and historical Strava troubleshooting are documented in
 > [docs/fork-maintenance.md](docs/fork-maintenance.md).
 
 ## Note
@@ -287,13 +287,14 @@ Open your browser and visit localhost:80
 
 ### Modifying Mapbox token
 
-> **Security Notice**: The Mapbox token has been migrated from `src/themes/classic/utils/const.ts` to `config.yml` for better security management.
+> **Security Notice**: The Mapbox token must not be committed in `config.yml` or source code. `config.yml` contains an empty default; provide the token at build time.
 >
 > **For GitHub Actions / Automated Deployment**:
 > 1. Go to your repository's **Settings → Secrets and variables → Actions**
 > 2. Create a new secret named `MAPBOX_TOKEN` with your Mapbox token value
 > 3. The build process automatically injects this token during GitHub Actions workflow execution
 > 4. You should NOT commit your token to the repository
+> For Cloudflare Git-connected builds, set `VITE_MAPBOX_TOKEN` in the Cloudflare build environment separately; GitHub Actions secrets are not forwarded automatically.
 >
 > **Priority Order**:
 > - GitHub Actions Secret (`MAPBOX_TOKEN` env var) takes priority
@@ -308,13 +309,7 @@ Set your [Mapbox token](https://www.mapbox.com/) in one of these ways:
 # No changes needed to config.yml - it will use the secret automatically
 ```
 
-**Option 2: Local Development with config.yml**
-```yaml
-# config.yml
-mapbox_token: 'pk.eyJ1...your-token-here'
-```
-
-**Option 3: Environment Variable (Local Development)**
+**Option 2: Environment Variable (Local Development)**
 ```bash
 export VITE_MAPBOX_TOKEN='pk.eyJ1...your-token-here'
 pnpm develop
