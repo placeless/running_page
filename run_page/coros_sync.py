@@ -125,13 +125,20 @@ class Coros:
             ):
                 raise RuntimeError("COROS activity query failed; refusing empty sync")
             activities = page.get("dataList")
-            if activities is None and str(page.get("count")) != "0":
+            total_pages = page.get("totalPage")
+            # COROS reports the *global* count even when a request is beyond
+            # the final page, but omits dataList on that empty page.
+            beyond_last_page = total_pages is not None and page_number > int(
+                total_pages
+            )
+            if not activities and (str(page.get("count")) == "0" or beyond_last_page):
+                break
+            if not isinstance(activities, list) or not activities:
                 raise RuntimeError(
                     "COROS returned an unexpected activity list "
-                    f"(keys={sorted(page)}, count={page.get('count')!r})"
+                    f"(keys={sorted(page)}, count={page.get('count')!r}, "
+                    f"page={page_number}, totalPage={total_pages})"
                 )
-            if not activities:
-                break
             for activity in activities:
                 label_id = activity["labelId"]
                 activity["sportType"]
@@ -139,6 +146,8 @@ class Coros:
                     continue
                 all_activities_ids_types.append(activity)
 
+            if total_pages is not None and page_number >= int(total_pages):
+                break
             page_number += 1
 
         return all_activities_ids_types

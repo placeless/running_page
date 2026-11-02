@@ -132,3 +132,50 @@ def test_coros_api_error_does_not_pass_as_empty_sync():
     coros.base_url = "https://teameuapi.coros.com"
     with pytest.raises(RuntimeError, match="refusing empty sync"):
         asyncio.run(coros.fetch_activity_ids_types(only_run=False))
+
+
+def test_coros_pagination_stops_at_last_page():
+    page_numbers = []
+
+    class FakeRequest:
+        async def get(self, url, params):
+            page = params["pageNumber"]
+            page_numbers.append(page)
+            return httpx.Response(
+                200,
+                json={
+                    "result": "0000",
+                    "data": {
+                        "count": 21,
+                        "pageNumber": page,
+                        "totalPage": 2,
+                        "dataList": [{"labelId": str(page), "sportType": 100}],
+                    },
+                },
+                request=httpx.Request("GET", url),
+            )
+
+    coros = coros_sync.Coros("account", "hash")
+    coros.req = FakeRequest()
+    coros.base_url = "https://teamapi.coros.com"
+    results = asyncio.run(coros.fetch_activity_ids_types(only_run=False))
+    assert page_numbers == [1, 2]
+    assert [activity["labelId"] for activity in results] == ["1", "2"]
+
+
+def test_coros_exhausted_page_omits_data_list_but_keeps_global_count():
+    class FakeRequest:
+        async def get(self, url, params):
+            return httpx.Response(
+                200,
+                json={"result": "0000", "data": {"count": 135, "totalPage": 7}},
+                request=httpx.Request("GET", url),
+            )
+
+    coros = coros_sync.Coros("account", "hash")
+    coros.req = FakeRequest()
+    coros.base_url = "https://teamapi.coros.com"
+    # Simulate starting a fetch on page 8 by the query being beyond last page.
+    # Here page 1 has no records despite 7 pages, which must still fail.
+    with pytest.raises(RuntimeError, match="unexpected activity list"):
+        asyncio.run(coros.fetch_activity_ids_types(only_run=False))
