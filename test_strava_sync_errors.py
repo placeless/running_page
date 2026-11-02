@@ -6,7 +6,7 @@ from pathlib import Path
 from stravalib.exc import Fault
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "run_page"))
-from strava_sync import is_inactive_strava_app  # noqa: E402
+from strava_sync import is_inactive_strava_app
 
 
 class FakeResponse:

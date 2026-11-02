@@ -3,9 +3,9 @@ import argparse
 import json
 import sys
 
-from stravalib.exc import Fault
 from config import JSON_FILE, SQL_FILE
 from generator import Generator
+from stravalib.exc import Fault
 
 
 def is_inactive_strava_app(error: Fault) -> bool:
