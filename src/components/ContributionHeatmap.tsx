@@ -659,8 +659,10 @@ export const ContributionHeatmap = memo(function ContributionHeatmap({
               className="rounded-md border border-[var(--color-border)] px-2 text-xs hover:bg-[var(--color-bg)]"
               onClick={() => onSelectActivity?.(activity)}
             >
-              {activity.start_date_local.slice(11, 16)} · {activity.name} ·{' '}
-              {(activity.distance / 1000).toFixed(1)} km
+              {activity.start_date_local.length > 10
+                ? `${activity.start_date_local.slice(11, 16)} · `
+                : ''}
+              {activity.name} · {(activity.distance / 1000).toFixed(1)} km
             </button>
           ))}
           <button

@@ -8,6 +8,7 @@ interface ChinaMapProps {
   filter: SportFilter;
   onSelectProvince?: (province: string | null) => void;
   selectedProvince?: string | null;
+  embedded?: boolean;
 }
 
 type GeoFeature = {
@@ -62,6 +63,7 @@ export const ChinaMap = memo(function ChinaMap({
   filter,
   onSelectProvince,
   selectedProvince,
+  embedded = false,
 }: ChinaMapProps) {
   const { locale } = useLocale();
   const [hoveredProvince, setHoveredProvince] = useState<string | null>(null);
@@ -90,7 +92,7 @@ export const ChinaMap = memo(function ChinaMap({
   const provinceCount = useMemo(() => {
     const map = new Map<string, number>();
     for (const a of activities) {
-      const p = extractProvince(a.location_country);
+      const p = a.region ?? extractProvince(a.location_country);
       if (p) map.set(p, (map.get(p) ?? 0) + 1);
     }
     return map;
@@ -113,12 +115,22 @@ export const ChinaMap = memo(function ChinaMap({
     <div
       role="region"
       aria-label={locale === 'zh' ? '足迹地图' : 'Footprint map'}
-      className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-5"
+      className={
+        embedded
+          ? ''
+          : 'rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-5'
+      }
     >
       {/* Header */}
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-base font-semibold">
-          {locale === 'zh' ? '足迹地图' : 'Footprint Map'}
+          {embedded
+            ? locale === 'zh'
+              ? '中国省份'
+              : 'Chinese provinces'
+            : locale === 'zh'
+              ? '足迹地图'
+              : 'Footprint Map'}
         </h2>
         <div className="flex items-center gap-2 text-xs text-[var(--color-muted)]">
           {selectedProvince ? (

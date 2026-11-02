@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 import argparse
-import json
 import sys
 
 from config import JSON_FILE, SQL_FILE
 from generator import Generator
+from privacy_export import write_public_json
 from stravalib.exc import Fault
 
 
@@ -50,9 +50,7 @@ def run_strava_sync(
     generator.only_run = only_run
     generator.sync(False)
 
-    activities_list = generator.load()
-    with open(JSON_FILE, "w") as f:
-        json.dump(activities_list, f)
+    write_public_json(JSON_FILE, generator.load())
 
 
 if __name__ == "__main__":

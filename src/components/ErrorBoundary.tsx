@@ -35,6 +35,9 @@ export class ErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.hasError) {
+      const activityLoadError = this.state.message.startsWith(
+        'Failed to load activities'
+      );
       return (
         <div
           className="flex min-h-screen flex-col items-center justify-center gap-3"
@@ -47,7 +50,7 @@ export class ErrorBoundary extends Component<Props, State> {
             className="text-base font-medium"
             style={{ color: 'var(--color-text, #e6edf3)' }}
           >
-            Failed to load activities
+            {activityLoadError ? 'Failed to load activities' : 'Page error'}
           </p>
           <p className="text-xs">{this.state.message}</p>
           <button

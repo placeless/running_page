@@ -384,10 +384,13 @@ export function TracksPage({
                   locale === 'zh' ? 'zh-CN' : 'en-US',
                   { year: 'numeric', month: 'short', day: 'numeric' }
                 )}{' '}
-                {new Date(selectedActivity.start_date_local).toLocaleTimeString(
-                  locale === 'zh' ? 'zh-CN' : 'en-US',
-                  { hour: '2-digit', minute: '2-digit' }
-                )}
+                {selectedActivity.start_date_local.length > 10 &&
+                  new Date(
+                    selectedActivity.start_date_local
+                  ).toLocaleTimeString(locale === 'zh' ? 'zh-CN' : 'en-US', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
               </p>
               <div className="grid grid-cols-3 gap-2">
                 <div>

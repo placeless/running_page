@@ -30,10 +30,13 @@ export const PersonalBest = memo(function PersonalBest({
 }: PersonalBestProps) {
   const { locale } = useLocale();
 
-  // Only outdoor runs with valid GPS tracks (polyline must be substantial, not just a point)
+  // Privacy-safe exports may suppress GPS without suppressing race results.
+  // Use recorded distance/time instead of coupling personal bests to geometry.
   const runs = activities.filter(
     (a) =>
-      a.type === 'Run' && a.summary_polyline && a.summary_polyline.length > 20
+      a.type === 'Run' &&
+      a.distance > 0 &&
+      !/treadmill|indoor/i.test(a.subtype ?? '')
   );
 
   const labels: Record<string, string> =

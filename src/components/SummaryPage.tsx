@@ -174,7 +174,10 @@ function SummaryCard({
               onClick={() => onSelectActivity(a)}
             >
               <span>
-                {a.start_date_local.slice(11, 16)} · {a.name}
+                {a.start_date_local.length > 10
+                  ? `${a.start_date_local.slice(11, 16)} · `
+                  : ''}
+                {a.name}
               </span>
               <span className="shrink-0 text-[var(--color-accent)]">
                 {number(a.distance / 1000)} km ↗

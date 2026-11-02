@@ -21,9 +21,10 @@ git merge upstream/master
 ```
 
 During conflict resolution, retain the **fork's** versions of
-`src/static/activities.json` and generated `assets/*.svg`. Deleted
-historical SVGs do not need to be restored; the data generator creates
-current assets. Keep `run_page/data.db` and all activity exports. For source
+`src/static/activities.json` (only after validating its public privacy schema)
+and reviewed, non-sensitive `assets/*.svg`. Deleted historical SVGs do not need
+to be restored; the data generator creates current assets. Keep original
+SQLite and GPS files in the **private archive**, not in public Git. For source
 conflicts, adopt the upstream code structure and reapply personal behavior in
 `src/themes/classic/`, `config.yml`, and
 `.github/workflows/run_data_sync.yml`. Do not reintroduce deleted pre-3.0
@@ -43,7 +44,41 @@ GitHub Actions builds can obtain it from the `MAPBOX_TOKEN` repository secret;
 Cloudflare builds require that environment variable to be configured **in
 Cloudflare separately**. Restrict the token's allowed origins in Mapbox.
 
+## Geography and maps
+
+Activity `location_country` is raw provider data, not a trustworthy normalized
+country. Some historical activities labelled `United States` have GPS starts
+in China or Spain. At export time `run_page/generator/geography.py` derives
+`country_code` (ISO alpha-2) from the route start and `region` from offline
+Chinese province and Spanish province boundaries. Original location and GPS
+remain unchanged **only in the private source database**. The public exporter
+discards raw addresses and suppresses or clips GPS geometry. Unlocatable activities are not assigned an
+invented country or province; activities in other countries can be assigned a
+country without a province. This requires no Nominatim requests in CI. The
+Spanish source/attribution is documented in `run_page/generator/data/README.md`.
+
+The dashboard shows a world footprint view (click a country to filter, click
+China for province-level boundaries) and an independent GPS route map. The
+route map chooses its initial camera from the activity distribution: when at
+least 5% (and at least three) of the tracks start over 1,200 km from the most
+recent mapped activity, it shows the world with route-count clusters; otherwise
+it fits the routes in the current filter. The **Region / World** control
+switches between all routes and the latest running region (within 250 km),
+without changing the route filter itself. Selecting a single activity always
+fits that route. The map uses Mapbox GL JS when a Mapbox token is configured;
+without a token or after a Mapbox failure it uses MapLibre GL JS to render
+CARTO. If external basemaps fail, MapLibre displays GPS routes against a plain
+background. Mapbox GL JS v2+ cannot act as a token-free CARTO fallback.
+Mapbox access tokens are **public browser tokens**, not server secrets;
+configure origin restrictions.
+
 ## Run Data Sync: COROS (November 2026 cutover)
+
+**Privacy-first publication:** Original FIT and SQLite data are archived in
+`placeless/running-data-private`. Public builds reject raw source records or
+tracked sensitive files; the archive is accessed through a repository-scoped
+SSH Deploy Key. See [privacy-first export](privacy-export.md). Until a private
+sensitive-zone policy is configured, only aggregate activity records are public.
 
 The fork uses the upstream COROS Training Hub downloader, **not** the Strava
 API. `.github/workflows/run_data_sync.yml` selects `RUN_TYPE: coros`; its

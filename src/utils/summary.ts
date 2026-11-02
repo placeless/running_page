@@ -68,7 +68,9 @@ export function summaryChart(
     if (period === 'month') return date.slice(8, 10);
     if (period === 'week')
       return String(((new Date(`${date}T00:00:00Z`).getUTCDay() + 6) % 7) + 1);
-    return a.start_date_local.slice(11, 16);
+    return a.start_date_local.length > 10
+      ? a.start_date_local.slice(11, 16)
+      : '—';
   };
   let length = 0;
   if (period === 'year') length = 12;

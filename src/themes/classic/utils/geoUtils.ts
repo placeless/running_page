@@ -4,7 +4,7 @@ import { WebMercatorViewport } from '@math.gl/web-mercator';
 import type { FeatureCollection, LineString, Feature } from 'geojson';
 import type { GeoJsonProperties } from 'geojson';
 import type { RPGeometry } from '../static/run_countries';
-import worldGeoJsonUrl from '../static/world.zh.json?url';
+import worldGeoJsonUrl from '../../../static/world.zh.json?url';
 import { getMapThemeFromCurrentTheme } from '../hooks/useTheme';
 import {
   CYCLING_COLOR,

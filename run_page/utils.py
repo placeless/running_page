@@ -1,4 +1,3 @@
-import json
 import time
 from datetime import datetime
 
@@ -9,6 +8,7 @@ try:
 except Exception:  # noqa: S110, BLE001
     pass
 from generator import Generator
+from privacy_export import write_public_json
 from stravalib.client import Client
 from stravalib.exc import RateLimitExceeded
 
@@ -56,9 +56,7 @@ def make_activities_file(
     generator.sync_from_data_dir(
         data_dir, file_suffix=file_suffix, activity_title_dict=activity_title_dict
     )
-    activities_list = generator.load()
-    with open(json_file, "w") as f:
-        json.dump(activities_list, f)
+    write_public_json(json_file, generator.load())
 
 
 def make_strava_client(client_id, client_secret, refresh_token):

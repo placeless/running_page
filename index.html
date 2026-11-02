@@ -55,11 +55,20 @@
     <link rel="icon" type="image/png" href="%BASE_URL%/images/favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Running Page</title>
-    <script
-      defer
-      src="https://placeless.net/js/cf.js"
-      data-cf-beacon='{"token":"8c631e081d224d2795353530267e2104"}'
-    ></script>
+    <script>
+      // This site-specific beacon must not run on localhost or other forks.
+      if (
+        location.hostname === 'placeless.net' ||
+        location.hostname === 'www.placeless.net'
+      ) {
+        const beacon = document.createElement('script');
+        beacon.defer = true;
+        beacon.src = 'https://placeless.net/js/cf.js';
+        beacon.dataset.cfBeacon =
+          '{"token":"8c631e081d224d2795353530267e2104"}';
+        document.head.appendChild(beacon);
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

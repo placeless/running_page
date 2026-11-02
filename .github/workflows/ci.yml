@@ -66,6 +66,8 @@ jobs:
 
       - name: Run check and build
         run: |
+          node scripts/check-public-repository.mjs
+          node scripts/validate-public-data.mjs
           pnpm run check
           pnpm run lint
           pnpm run build

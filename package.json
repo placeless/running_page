@@ -14,6 +14,7 @@
     "gcoord": "^1.0.7",
     "html-to-image": "^1.11.13",
     "mapbox-gl": "^3.23.0",
+    "maplibre-gl": "^5.0.0",
     "rc-virtual-list": "^3.19.2",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
@@ -29,7 +30,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "data:clean": "rm -f run_page/data.db {GPX,TCX,FIT}_OUT/* activities/* src/static/activities.json",
     "data:download:garmin": "python3 run_page/garmin_sync.py",
     "data:analysis": "python3 run_page/gen_svg.py --from-db --type github --output assets/github.svg",
     "build": "vite build",

@@ -26,3 +26,20 @@ route.png
 route.svg
 
 .env
+
+# Original GPS / databases and private export policies must never be published.
+# Already tracked files require a separate, backed-up git untracking migration.
+/private/
+/.private-running-data/
+/run_page/data.db
+/FIT_OUT/
+/GPX_OUT/
+/TCX_OUT/
+/activities/
+/imported.json
+
+# Generated activity graphics containing personal history and route shapes.
+/assets/grid.svg
+/assets/github*.svg
+/assets/mol*.svg
+/assets/year*.svg

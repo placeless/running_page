@@ -27,6 +27,8 @@ export interface Activity {
   start_date: string;
   start_date_local: string;
   location_country?: string | null;
+  country_code?: string | null;
+  region?: string | null;
   summary_polyline?: string | null;
   average_heartrate?: number | null;
   elevation_gain: number | null;
@@ -235,6 +237,7 @@ const titleForRun = (run: Activity): string => {
   }
   // 3. use time+length if location or type is not available
   const runDistance = run.distance / 1000;
+  if (run.start_date_local.length <= 10) return run.name || 'Workout';
   const runHour = +run.start_date_local.slice(11, 13);
   if (run.type === 'Run') {
     if (runDistance > 20 && runDistance < 40) {

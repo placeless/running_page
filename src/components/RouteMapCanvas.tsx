@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
+import maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import * as polyline from '@mapbox/polyline';
 import type { Activity } from '../types';
 import { hasRoute, routeForActivity } from '../core/routeFallback';
+import { routeViewport, type RouteView } from '../core/routeViewport';
 import { MAPBOX_TOKEN } from '../config';
 import { useLocale } from '../hooks/useLocale';
 import './RouteMap.css';
@@ -39,16 +42,42 @@ export function RouteMapCanvas({
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const styleReadyRef = useRef(false);
   const cameraRef = useRef<mapboxgl.CameraOptions | null>(null);
-  const fittedRef = useRef<unknown>(null);
-  const [provider, setProvider] = useState(MAPBOX_TOKEN ? 'mapbox' : 'carto');
+  const fittedRef = useRef<{ routes: unknown; view: RouteView } | null>(null);
+  const [provider, setProvider] = useState<'mapbox' | 'carto' | 'plain'>(
+    MAPBOX_TOKEN ? 'mapbox' : 'carto'
+  );
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>(
     'loading'
   );
+  const [preferredView, setPreferredView] = useState<{
+    scope: Activity[];
+    view: RouteView;
+  } | null>(null);
   const [retry, setRetry] = useState(0);
-  const style =
-    provider === 'mapbox'
-      ? `mapbox://styles/mapbox/${dark === false ? 'light' : 'dark'}-v11`
-      : `https://basemaps.cartocdn.com/gl/${dark === false ? 'positron' : 'dark-matter'}-gl-style/style.json`;
+  // Mapbox GL JS v2+ requires a token even for external basemaps.
+  // Use MapLibre for CARTO and the built-in plain style.
+  const useMapbox = provider === 'mapbox' && !!MAPBOX_TOKEN;
+  const style = useMemo<string | mapboxgl.StyleSpecification>(
+    () =>
+      provider === 'mapbox'
+        ? `mapbox://styles/mapbox/${dark === false ? 'light' : 'dark'}-v11`
+        : provider === 'carto'
+          ? `https://basemaps.cartocdn.com/gl/${dark === false ? 'positron' : 'dark-matter'}-gl-style/style.json`
+          : {
+              version: 8,
+              sources: {},
+              layers: [
+                {
+                  id: 'background',
+                  type: 'background',
+                  paint: {
+                    'background-color': dark === false ? '#f5f5f5' : '#171717',
+                  },
+                },
+              ],
+            },
+    [provider, dark]
+  );
 
   const displayActivity = useMemo(
     () =>
@@ -60,42 +89,59 @@ export function RouteMapCanvas({
   const fallbackActivity =
     selectedActivity && !hasRoute(selectedActivity) ? displayActivity : null;
 
-  const routes = useMemo(() => {
-    const items = selectedActivity
-      ? displayActivity
-        ? [displayActivity]
-        : []
-      : activities;
-    return items.flatMap((activity) => {
+  const routeActivities = useMemo(
+    () =>
+      selectedActivity
+        ? displayActivity
+          ? [displayActivity]
+          : []
+        : activities,
+    [selectedActivity, displayActivity, activities]
+  );
+
+  const routeGroups = useMemo(() => {
+    return routeActivities.flatMap((activity) => {
       const cached = routeCache.get(activity);
-      if (cached) return cached;
-      if (!activity.summary_polyline) return [];
+      if (cached) return cached.length ? [cached] : [];
+      const encodedSegments =
+        activity.route_segments ??
+        (activity.summary_polyline ? [activity.summary_polyline] : []);
       try {
-        const coordinates = polyline
-          .decode(activity.summary_polyline)
-          .map(([lat, lng]) => [lng, lat])
-          .filter(
-            ([lng, lat]) =>
-              Number.isFinite(lng) &&
-              Number.isFinite(lat) &&
-              Math.abs(lng) <= 180 &&
-              Math.abs(lat) <= 90
-          );
-        if (coordinates.length < 2) return [];
-        const features = [
-          {
-            type: 'Feature' as const,
-            properties: { type: activity.type },
-            geometry: { type: 'LineString' as const, coordinates },
-          },
-        ];
+        const features = encodedSegments.flatMap((encoded) => {
+          const coordinates = polyline
+            .decode(encoded)
+            .map(([lat, lng]) => [lng, lat]);
+          if (
+            coordinates.length < 2 ||
+            !coordinates.every(
+              ([lng, lat]) =>
+                Number.isFinite(lng) &&
+                Number.isFinite(lat) &&
+                Math.abs(lng) <= 180 &&
+                Math.abs(lat) <= 90
+            )
+          )
+            return [];
+          return [
+            {
+              type: 'Feature' as const,
+              properties: { type: activity.type },
+              geometry: { type: 'LineString' as const, coordinates },
+            },
+          ];
+        });
         routeCache.set(activity, features);
-        return features;
+        return features.length ? [features] : [];
       } catch {
         return [];
       }
     });
-  }, [activities, selectedActivity, displayActivity]);
+  }, [routeActivities]);
+  const routes = useMemo(() => routeGroups.flat(), [routeGroups]);
+  const routeStarts = useMemo(
+    () => routeGroups.map((parts) => parts[0].geometry.coordinates[0]),
+    [routeGroups]
+  );
 
   const routeBounds = useMemo(() => {
     const bounds = new mapboxgl.LngLatBounds();
@@ -106,10 +152,46 @@ export function RouteMapCanvas({
     return bounds;
   }, [routes]);
 
+  const latestRoute = useMemo(() => {
+    if (selectedActivity) return null;
+    const latest = [...activities]
+      .filter((activity) => hasRoute(activity))
+      .sort((a, b) => b.start_date_local.localeCompare(a.start_date_local))[0];
+    return (latest && routeCache.get(latest)?.[0]) || null;
+  }, [activities, selectedActivity]);
+
+  const coverage = useMemo(
+    () =>
+      routeViewport(
+        routeStarts as [number, number][],
+        (latestRoute?.geometry.coordinates[0] as [number, number]) ?? null
+      ),
+    [routeStarts, latestRoute]
+  );
+  const view: RouteView = selectedActivity
+    ? 'region'
+    : preferredView?.scope === activities
+      ? preferredView.view
+      : coverage.initialView;
+
+  const regionalBounds = useMemo(() => {
+    if (coverage.initialView !== 'world' || selectedActivity)
+      return routeBounds;
+    const bounds = new mapboxgl.LngLatBounds();
+    for (const index of coverage.nearbyRouteIndices) {
+      for (const part of routeGroups[index])
+        for (const point of part.geometry.coordinates)
+          bounds.extend(point as [number, number]);
+    }
+    return bounds.isEmpty() ? routeBounds : bounds;
+  }, [coverage, routeGroups, routeBounds, selectedActivity]);
+
   const fitRoutes = useCallback(() => {
     const map = mapRef.current;
     if (!map || routeBounds.isEmpty()) return;
-    map.fitBounds(routeBounds, {
+    // Both renderers accept coordinate pairs; their LngLatBounds classes are
+    // not interchangeable at runtime.
+    map.fitBounds(routeBounds.toArray(), {
       padding: { top: 35, bottom: 35, left: 35, right: 65 },
       maxZoom: selectedActivity ? 16 : 13,
       duration: window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -117,6 +199,19 @@ export function RouteMapCanvas({
         : 500,
     });
   }, [routeBounds, selectedActivity]);
+
+  const focusRoutes = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (regionalBounds.isEmpty()) return;
+    map.fitBounds(regionalBounds.toArray(), {
+      padding: { top: 40, bottom: 40, left: 40, right: 60 },
+      maxZoom: 8,
+      duration: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        ? 0
+        : 500,
+    });
+  }, [regionalBounds]);
 
   const drawRoutes = useCallback(() => {
     const map = mapRef.current;
@@ -147,42 +242,108 @@ export function RouteMapCanvas({
     }
     map.setPaintProperty('routes', 'line-width', selectedActivity ? 3.5 : 2);
     map.setPaintProperty('routes', 'line-opacity', selectedActivity ? 1 : 0.7);
-    if (fittedRef.current !== routes) {
-      fittedRef.current = routes;
-      fitRoutes();
+    // Show route density when worldwide lines become too small to see.
+    const locationData = {
+      type: 'FeatureCollection' as const,
+      features: routeStarts.map((start) => ({
+        type: 'Feature' as const,
+        properties: {},
+        geometry: {
+          type: 'Point' as const,
+          coordinates: start,
+        },
+      })),
+    };
+    const locations = map.getSource('route-locations') as
+      mapboxgl.GeoJSONSource | undefined;
+    if (locations) locations.setData(locationData);
+    else {
+      map.addSource('route-locations', {
+        type: 'geojson',
+        data: locationData,
+        cluster: true,
+        clusterRadius: 45,
+        clusterMaxZoom: 6,
+      });
+      map.addLayer({
+        id: 'route-clusters',
+        type: 'circle',
+        source: 'route-locations',
+        filter: ['has', 'point_count'],
+        maxzoom: 6,
+        paint: {
+          'circle-color': '#f97316',
+          'circle-radius': [
+            'step',
+            ['get', 'point_count'],
+            12,
+            20,
+            17,
+            100,
+            23,
+          ],
+          'circle-opacity': 0.88,
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#ffffff',
+        },
+      });
+      map.addLayer({
+        id: 'route-cluster-count',
+        type: 'symbol',
+        source: 'route-locations',
+        filter: ['has', 'point_count'],
+        maxzoom: 6,
+        layout: {
+          'text-field': ['get', 'point_count_abbreviated'],
+          'text-size': 12,
+        },
+        paint: { 'text-color': '#171717' },
+      });
     }
-  }, [routes, selectedActivity, fitRoutes]);
+    if (
+      fittedRef.current?.routes !== routes ||
+      fittedRef.current?.view !== view
+    ) {
+      fittedRef.current = { routes, view };
+      if (selectedActivity || view === 'world') fitRoutes();
+      else focusRoutes();
+    }
+  }, [routes, routeStarts, selectedActivity, focusRoutes, fitRoutes, view]);
 
+  // The WebGL map is owned by the renderer, not by the UI language.
+  // Recreating it on every locale change discards loaded tiles and routes.
   useEffect(() => {
     if (!containerRef.current || !panelRef.current) return;
-    const map = new mapboxgl.Map({
+    // Mapbox and MapLibre implement the common Map/Control API used here.
+    // Keep the structural type bridge at the integration boundary.
+    const engine = useMapbox
+      ? mapboxgl
+      : (maplibregl as unknown as typeof mapboxgl);
+    // Mapbox and MapLibre expose this setting at different levels. Setting
+    // preserveDrawingBuffer only at the top level is silently ignored by
+    // MapLibre 5, leaving its WebGL context in the default non-preserved mode.
+    const bufferOptions = useMapbox
+      ? { preserveDrawingBuffer: true }
+      : { canvasContextAttributes: { preserveDrawingBuffer: true } };
+    styleReadyRef.current = false;
+    fittedRef.current = null;
+    const map = new engine.Map({
       container: containerRef.current,
       accessToken: MAPBOX_TOKEN,
-      language: zh ? 'zh-Hans' : 'en',
+      ...bufferOptions,
       style: { version: 8, sources: {}, layers: [] },
       center: [121.4, 31.2],
       zoom: 10,
       ...cameraRef.current,
-      locale: zh
-        ? {
-            'Map.Title': '跑步路线地图',
-            'NavigationControl.ZoomIn': '放大',
-            'NavigationControl.ZoomOut': '缩小',
-            'NavigationControl.ResetBearing': '恢复朝北',
-            'FullscreenControl.Enter': '全屏查看',
-            'FullscreenControl.Exit': '退出全屏',
-            'AttributionControl.ToggleAttribution': '地图来源',
-          }
-        : {},
     });
     mapRef.current = map;
-    map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+    map.addControl(new engine.NavigationControl(), 'top-right');
     map.addControl(
-      new mapboxgl.FullscreenControl({ container: panelRef.current }),
+      new engine.FullscreenControl({ container: panelRef.current }),
       'top-right'
     );
     map.addControl(
-      new mapboxgl.ScaleControl({ unit: 'metric', maxWidth: 90 }),
+      new engine.ScaleControl({ unit: 'metric', maxWidth: 90 }),
       'bottom-left'
     );
     const observer = new ResizeObserver(() => map.resize());
@@ -198,23 +359,49 @@ export function RouteMapCanvas({
       map.remove();
       mapRef.current = null;
     };
-  }, [zh]);
+  }, [useMapbox]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    // Native map controls are outside React; update their accessible labels
+    // without replacing the map, its style, or its WebGL canvas.
+    const labels: [string, string][] = [
+      ['zoom-in', zh ? '放大' : 'Zoom in'],
+      ['zoom-out', zh ? '缩小' : 'Zoom out'],
+      ['compass', zh ? '恢复朝北' : 'Reset bearing to north'],
+      ['fullscreen', zh ? '全屏查看' : 'Enter fullscreen'],
+      ['shrink', zh ? '退出全屏' : 'Exit fullscreen'],
+    ];
+    for (const [name, label] of labels) {
+      const control = container.querySelector<HTMLButtonElement>(
+        `.mapboxgl-ctrl-${name}, .maplibregl-ctrl-${name}`
+      );
+      if (control) {
+        control.title = label;
+        control.setAttribute('aria-label', label);
+      }
+    }
+  }, [zh, useMapbox]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    let failed = false;
     const onError = (event: mapboxgl.ErrorEvent) => {
       const code = (event.error as Error & { status?: number }).status;
-      if (provider === 'mapbox' && (code === 401 || code === 403)) {
+      if (
+        provider === 'mapbox' &&
+        (!styleReadyRef.current || code === 401 || code === 403)
+      ) {
+        setStatus('loading');
         setProvider('carto');
-      } else {
-        failed = true;
-        setStatus('error');
+      } else if (!styleReadyRef.current) {
+        if (provider === 'carto') setProvider('plain');
+        else setStatus('error');
       }
     };
     const onIdle = () => {
-      if (!failed) setStatus('ready');
+      if (styleReadyRef.current) setStatus('ready');
     };
     const onLoading = () => setStatus('loading');
     map.on('error', onError);
@@ -227,7 +414,11 @@ export function RouteMapCanvas({
       localIdeographFontFamily: 'sans-serif',
     });
     const timer = window.setTimeout(() => {
-      if (!map.isStyleLoaded()) setStatus('error');
+      if (!styleReadyRef.current) {
+        if (provider === 'mapbox') setProvider('carto');
+        else if (provider === 'carto') setProvider('plain');
+        else setStatus('error');
+      }
     }, 15000);
     return () => {
       window.clearTimeout(timer);
@@ -235,7 +426,7 @@ export function RouteMapCanvas({
       map.off('idle', onIdle);
       map.off('styledataloading', onLoading);
     };
-  }, [style, provider, retry, zh]);
+  }, [style, provider, retry]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -249,7 +440,7 @@ export function RouteMapCanvas({
     return () => {
       map.off('style.load', onStyleLoad);
     };
-  }, [drawRoutes, style, retry, zh]);
+  }, [drawRoutes, style, retry]);
 
   useEffect(() => {
     let wasFullscreen = document.fullscreenElement === panelRef.current;
@@ -260,7 +451,8 @@ export function RouteMapCanvas({
         cancelAnimationFrame(frame);
         frame = requestAnimationFrame(() => {
           mapRef.current?.resize();
-          fitRoutes();
+          if (view === 'world' || selectedActivity) fitRoutes();
+          else focusRoutes();
         });
       }
       wasFullscreen = isFullscreen;
@@ -270,7 +462,7 @@ export function RouteMapCanvas({
       cancelAnimationFrame(frame);
       document.removeEventListener('fullscreenchange', onFullscreen);
     };
-  }, [fitRoutes]);
+  }, [fitRoutes, focusRoutes, view, selectedActivity]);
 
   return (
     <section
@@ -289,7 +481,7 @@ export function RouteMapCanvas({
           >
             {selectedActivity
               ? `${selectedActivity.name} · ${(selectedActivity.distance / 1000).toFixed(1)} km`
-              : `${routes.length.toLocaleString()} ${zh ? '条轨迹' : 'routes'}`}
+              : `${routeStarts.length.toLocaleString()} ${zh ? (view === 'world' ? '条轨迹 · 全球足迹' : '条轨迹 · 区域视图') : view === 'world' ? 'routes · world overview' : 'routes · regional view'}`}
           </p>
         </div>
         <div className="flex shrink-0 gap-2">
@@ -301,10 +493,35 @@ export function RouteMapCanvas({
           <button
             className="route-map-action"
             disabled={!routes.length}
-            onClick={fitRoutes}
-            title={zh ? '将所有当前轨迹完整放入视野' : 'Fit all current routes'}
+            onClick={() => {
+              if (selectedActivity) fitRoutes();
+              else
+                setPreferredView({
+                  scope: activities,
+                  view: view === 'world' ? 'region' : 'world',
+                });
+            }}
+            title={
+              view === 'world'
+                ? zh
+                  ? '聚焦最近活动所在区域'
+                  : 'Focus the most recent running region'
+                : zh
+                  ? '将所有当前轨迹完整放入视野'
+                  : 'Fit all current routes'
+            }
           >
-            {zh ? '定位轨迹' : 'Fit routes'}
+            {selectedActivity
+              ? zh
+                ? '定位轨迹'
+                : 'Fit route'
+              : view === 'world'
+                ? zh
+                  ? '区域视图'
+                  : 'Region'
+                : zh
+                  ? '全球视图'
+                  : 'World'}
           </button>
         </div>
       </div>
@@ -340,15 +557,19 @@ export function RouteMapCanvas({
               ? zh
                 ? '正在加载地图…'
                 : 'Loading map…'
-              : provider === 'carto'
+              : provider === 'plain'
                 ? zh
-                  ? '备用底图 · CARTO'
-                  : 'Alternative basemap · CARTO'
-                : zh
-                  ? '底图 · Mapbox'
-                  : 'Basemap · Mapbox'}
+                  ? '仅显示轨迹 · 底图不可用'
+                  : 'Routes only · basemap unavailable'
+                : provider === 'carto'
+                  ? zh
+                    ? '备用底图 · CARTO'
+                    : 'Alternative basemap · CARTO'
+                  : zh
+                    ? '底图 · Mapbox'
+                    : 'Basemap · Mapbox'}
         </span>
-        {(status === 'error' || (provider === 'carto' && !!MAPBOX_TOKEN)) && (
+        {(status === 'error' || provider !== 'mapbox') && (
           <button
             className="route-map-action"
             onClick={() => {

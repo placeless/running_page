@@ -36,30 +36,13 @@ export const ProfileCard = memo(function ProfileCard({
   const yearsActive =
     allDates.length > 0 ? Math.max(...allDates) - Math.min(...allDates) + 1 : 0;
 
-  // Countries and provinces — use shared extractProvince for consistency with ChinaMap
+  // Generated ISO countries take precedence over unreliable provider labels.
   const countries = new Set<string>();
   const provinces = new Set<string>();
   for (const a of activities) {
-    const loc = a.location_country;
-    if (!loc || loc === 'None') continue;
-    // Detect country
-    if (loc.startsWith('{')) {
-      try {
-        const d = JSON.parse(loc.replace(/'/g, '"').replace(/None/g, 'null'));
-        if (d.country) countries.add(d.country);
-      } catch {
-        /* ignore */
-      }
-    } else if (loc.includes('泰国')) {
-      countries.add('泰国');
-    } else if (loc.includes('日本')) {
-      countries.add('日本');
-    } else {
-      countries.add('中国');
-    }
-    // Province — use shared logic (China-only)
-    const p = extractProvince(loc);
-    if (p) provinces.add(p);
+    if (a.country_code) countries.add(a.country_code);
+    const region = a.region ?? extractProvince(a.location_country);
+    if (region && a.country_code) provinces.add(`${a.country_code}:${region}`);
   }
 
   const formatHours = (secs: number) => `${(secs / 3600).toFixed(1)}h`;

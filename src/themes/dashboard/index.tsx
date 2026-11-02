@@ -25,7 +25,7 @@ import { RouteMap } from '@/components/RouteMap';
 import { CalendarWidget } from '@/components/CalendarWidget';
 import { ProfileCard } from '@/components/ProfileCard';
 import { PersonalBest } from '@/components/PersonalBest';
-import { ChinaMap } from '@/components/ChinaMap';
+import { FootprintMap } from '@/components/FootprintMap';
 
 const TracksPage = lazy(() =>
   import('@/components/TracksPage').then((module) => ({
@@ -60,7 +60,8 @@ function Dashboard() {
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(
     null
   );
-  const [selectedProvince, setSelectedProvince] = useState<string | null>(null);
+  const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
+  const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const [page, setPage] = useState<Page>(pageFromPath);
 
   useEffect(() => {
@@ -78,8 +79,14 @@ function Dashboard() {
     window.scrollTo({ top: 0, behavior: 'instant' });
   };
 
-  const selectProvince = useCallback((province: string | null) => {
-    setSelectedProvince(province);
+  const selectRegion = useCallback((region: string | null) => {
+    setSelectedRegion(region);
+    setSelectedActivity(null);
+  }, []);
+
+  const selectCountry = useCallback((country: string | null) => {
+    setSelectedCountry(country);
+    setSelectedRegion(null);
     setSelectedActivity(null);
   }, []);
 
@@ -88,19 +95,23 @@ function Dashboard() {
   const filtered = useFilteredActivities(activities, filter, year);
   const heatmapYear = year ?? years[0] ?? currentYear;
 
-  // Activities filtered to the selected province (for RouteMap)
-  const provinceFiltered = useMemo(() => {
-    if (!selectedProvince) return filtered;
+  // Region identifiers include country so similarly named provinces don't collide.
+  const geographyFiltered = useMemo(() => {
     return filtered.filter(
-      (a) => extractProvince(a.location_country) === selectedProvince
+      (a) =>
+        (!selectedCountry || a.country_code === selectedCountry) &&
+        (!selectedRegion ||
+          `${a.country_code}:${a.region ?? extractProvince(a.location_country)}` ===
+            selectedRegion)
     );
-  }, [filtered, selectedProvince]);
+  }, [filtered, selectedCountry, selectedRegion]);
 
   const selectActivity = useCallback(
     (activity: Activity | null) => {
       setSelectedActivity(activity);
       if (activity) {
-        setSelectedProvince(null);
+        setSelectedRegion(null);
+        setSelectedCountry(null);
         if (window.matchMedia('(max-width: 1023px)').matches) {
           requestAnimationFrame(() =>
             routeSectionRef.current?.scrollIntoView({
@@ -191,7 +202,8 @@ function Dashboard() {
                   setYear={(value) => {
                     setYear(value);
                     setSelectedActivity(null);
-                    setSelectedProvince(null);
+                    setSelectedRegion(null);
+                    setSelectedCountry(null);
                   }}
                   selectedActivity={selectedActivity}
                   onSelectActivity={selectActivity}
@@ -202,15 +214,16 @@ function Dashboard() {
               {/* Right column */}
               <div className="flex min-w-0 flex-col gap-6 overflow-hidden">
                 <ProfileCard activities={activities} filter={filter} />
-                <ChinaMap
+                <FootprintMap
                   activities={filtered}
-                  filter={filter}
-                  selectedProvince={selectedProvince}
-                  onSelectProvince={selectProvince}
+                  selectedCountry={selectedCountry}
+                  selectedRegion={selectedRegion}
+                  onSelectCountry={selectCountry}
+                  onSelectRegion={selectRegion}
                 />
                 <div ref={routeSectionRef} className="scroll-mt-28">
                   <RouteMap
-                    activities={provinceFiltered}
+                    activities={geographyFiltered}
                     allActivities={activities}
                     selectedActivity={selectedActivity}
                     dark={dark}

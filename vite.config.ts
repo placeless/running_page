@@ -1,10 +1,15 @@
 import process from 'node:process';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import yaml from '@modyfi/vite-plugin-yaml';
 import svgr from 'vite-plugin-svgr';
+import { validatePublicData } from './scripts/validate-public-data.mjs';
+import { checkPublicRepository } from './scripts/check-public-repository.mjs';
+
+const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 
 const colorClassMapping: { [key: string]: string } = {
   '#1a1a1a': 'svg-color-bg',
@@ -18,6 +23,16 @@ const colorClassMapping: { [key: string]: string } = {
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
+    {
+      name: 'public-activity-privacy-guard',
+      apply: 'build',
+      buildStart() {
+        if (process.env.RUNNING_ALLOW_UNSAFE_LOCAL_PREVIEW !== '1') {
+          checkPublicRepository();
+          validatePublicData();
+        }
+      },
+    },
     react(),
     tailwindcss(),
     yaml(),
@@ -87,11 +102,11 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
-      '@config': path.resolve(__dirname, 'config.yml'),
-      '@core': path.resolve(__dirname, './src/core'),
-      '@themes': path.resolve(__dirname, './src/themes'),
-      '@assets': path.resolve(__dirname, './assets'),
+      '@': path.resolve(projectRoot, './src'),
+      '@config': path.resolve(projectRoot, 'config.yml'),
+      '@core': path.resolve(projectRoot, './src/core'),
+      '@themes': path.resolve(projectRoot, './src/themes'),
+      '@assets': path.resolve(projectRoot, './assets'),
     },
   },
   build: {

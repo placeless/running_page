@@ -23,6 +23,8 @@ const standardizeCountryName = (country: string): string => {
   return country;
 };
 
+const countryNames = new Intl.DisplayNames(['en'], { type: 'region' });
+
 let activityDataCache: Activity[] | null = null;
 let activityDataError: unknown = null;
 let activityDataPromise: Promise<Activity[]> | null = null;
@@ -71,12 +73,18 @@ const processActivities = (activityData: Activity[]): ProcessedActivities => {
     }
 
     const { city, province, country } = location;
+    // Public exports intentionally omit raw provider addresses. Preserve
+    // country/province totals from the safe, boundary-classified fields.
+    const publicCountry =
+      run.country_code && /^[A-Z]{2}$/.test(run.country_code)
+        ? countryNames.of(run.country_code)
+        : country;
     // drop only one char city
     if (city.length > 1) {
       cities[city] = cities[city] ? cities[city] + run.distance : run.distance;
     }
-    if (province) provinces.add(province);
-    if (country) countries.add(standardizeCountryName(country));
+    if (run.region || province) provinces.add(run.region || province);
+    if (publicCountry) countries.add(standardizeCountryName(publicCountry));
     const year = run.start_date_local.slice(0, 4);
     years.add(year);
   });

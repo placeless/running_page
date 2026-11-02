@@ -16,6 +16,8 @@ from sqlalchemy import (
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
+from .geography import location_for_activity
+
 Base = declarative_base()
 
 
@@ -74,6 +76,10 @@ class Activity(Base):
                 out[key] = str(attr)
             else:
                 out[key] = attr
+
+        out["country_code"], out["region"] = location_for_activity(
+            self.summary_polyline, self.location_country
+        )
 
         if self.streak:
             out["streak"] = self.streak

@@ -1,6 +1,11 @@
 > **Maintaining this fork:** Upstream merges, personal data preservation and
 > COROS sync setup, data-source cutover and historical Strava troubleshooting are documented in
 > [docs/fork-maintenance.md](docs/fork-maintenance.md).
+>
+> **Publishing running data?** The public frontend must use the privacy-checked
+> export, never raw FIT or SQLite data. Read [docs/privacy-export.md](docs/privacy-export.md)
+> **before running CI sync or deploying**. Previously committed raw records
+> are not protected by frontend map filters.
 
 ## Note
 
@@ -155,7 +160,8 @@ English | [简体中文](https://github.com/yihong0618/running_page/blob/master/
 
 > automatically backup gpx data for easy backup and uploading to other software.
 >
-> Note: If you don't want to make the data public, you can choose strava's fuzzy processing, or private repositories.
+> Privacy note: this fork separates private COROS/FIT/SQLite records from an
+> explicitly sanitized public JSON export. See [privacy export](docs/privacy-export.md).
 
 ## Support
 
@@ -414,6 +420,11 @@ const GOOGLE_ANALYTICS_TRACKING_ID = '';
 ```
 
 > privacy protection,setting flowing env:
+
+> **Legacy upstream settings only.** `IGNORE_START_END_RANGE` and
+> `IGNORE_POLYLINE` do not replace the fork's privacy exporter; filtering must
+> happen before publication and the private archive must not be committed.
+> See [docs/privacy-export.md](docs/privacy-export.md).
 
 ```bash
 # ignore distance for each polyline start and end.

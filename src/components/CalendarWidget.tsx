@@ -175,7 +175,10 @@ export function CalendarWidget({
               onClick={() => onSelectActivity(activity)}
             >
               <span className="min-w-0 truncate">
-                {activity.start_date_local.slice(11, 16)} · {activity.name}
+                {activity.start_date_local.length > 10
+                  ? `${activity.start_date_local.slice(11, 16)} · `
+                  : ''}
+                {activity.name}
               </span>
               <span className="shrink-0 font-mono">
                 {(activity.distance / 1000).toFixed(1)} km
