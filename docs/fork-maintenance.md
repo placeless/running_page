@@ -34,9 +34,10 @@ Review `git diff --check`, `pnpm install --frozen-lockfile`,
 maintenance branch against `master`. Merge only after verifying routes,
 yearly statistics, map rendering and the generated activity data.
 
-The fork defaults to `classic` so an upstream theme redesign does not
-silently replace the deployed experience. Change `theme_preset` in
-`config.yml` deliberately. `config.yml` deliberately contains **no** Mapbox
+The fork defaults to the upstream `dashboard` theme as of November 2026.
+The `classic` theme remains available and can be restored by changing
+`theme_preset` in `config.yml` back to `classic` and rebuilding.
+`config.yml` deliberately contains **no** Mapbox
 token: supply `VITE_MAPBOX_TOKEN` in the frontend build environment instead.
 GitHub Actions builds can obtain it from the `MAPBOX_TOKEN` repository secret;
 Cloudflare builds require that environment variable to be configured **in
