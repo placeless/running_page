@@ -31,6 +31,12 @@ def test_missing_coros_timestamp_does_not_import_old_activity():
         coros_sync.activity_date({"labelId": "123"})
 
 
+def test_coros_prefers_local_calendar_date():
+    assert coros_sync.activity_date(
+        {"date": 20260630, "startTime": "2026-06-29T23:20:00Z"}
+    ) == date(2026, 6, 30)
+
+
 def test_region_probe_rejects_wrong_region_token(monkeypatch):
     requests = []
     original = httpx.AsyncClient
@@ -44,7 +50,7 @@ def test_region_probe_rejects_wrong_region_token(monkeypatch):
         assert request.headers["accesstoken"] == "test-token"
         if host == "teameuapi.coros.com":
             return httpx.Response(200, json={"result": 1019, "data": {"count": 0}})
-        return httpx.Response(200, json={"result": 0, "data": {"count": 0}})
+        return httpx.Response(200, json={"result": 0, "data": {"count": "0"}})
 
     transport = httpx.MockTransport(handler)
     monkeypatch.setattr(

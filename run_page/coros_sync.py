@@ -70,7 +70,7 @@ class Coros:
                     # rejected by subsequent activity requests (COROS 1019).
                     probe = await client.get(
                         f"{base_url}/activity/query",
-                        params={"pageNumber": 1, "size": 1},
+                        params={"modeList": "", "pageNumber": 1, "size": 1},
                         headers=auth_headers,
                     )
                     probe.raise_for_status()
@@ -79,9 +79,12 @@ class Coros:
                         continue
                     if not isinstance(payload.get("data"), dict):
                         continue
-                    if not any(
-                        key in payload["data"]
-                        for key in ("dataList", "count", "totalPage")
+                    probe_data = payload["data"]
+                    # An empty account omits dataList. A populated account
+                    # must return it; otherwise this host is not usable.
+                    if not (
+                        isinstance(probe_data.get("dataList"), list)
+                        or str(probe_data.get("count")) == "0"
                     ):
                         continue
                     self.base_url = base_url
@@ -122,8 +125,11 @@ class Coros:
             ):
                 raise RuntimeError("COROS activity query failed; refusing empty sync")
             activities = page.get("dataList")
-            if activities is None and page.get("count") != 0:
-                raise RuntimeError("COROS returned an unexpected activity list")
+            if activities is None and str(page.get("count")) != "0":
+                raise RuntimeError(
+                    "COROS returned an unexpected activity list "
+                    f"(keys={sorted(page)}, count={page.get('count')!r})"
+                )
             if not activities:
                 break
             for activity in activities:
@@ -179,9 +185,10 @@ class Coros:
 
 def activity_date(activity):
     """Read the COROS list timestamp, without relying on the export filename."""
-    value = activity.get("startTime")
+    # COROS exposes the activity's local calendar date as YYYYMMDD.
+    value = activity.get("date", activity.get("startTime"))
     if value is None:
-        raise ValueError("COROS activity has no startTime; cannot enforce --since")
+        raise ValueError("COROS activity has no date/startTime; cannot enforce --since")
     if isinstance(value, (int, float)) or (isinstance(value, str) and value.isdigit()):
         value = int(value)
         if 10_000_000 <= value <= 99_999_999:
