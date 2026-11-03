@@ -7,6 +7,7 @@ import tailwindcss from '@tailwindcss/vite';
 import yaml from '@modyfi/vite-plugin-yaml';
 import svgr from 'vite-plugin-svgr';
 import { validatePublicData } from './scripts/validate-public-data.mjs';
+import { validateCuratedRaces } from './scripts/validate-curated-races.mjs';
 import { checkPublicRepository } from './scripts/check-public-repository.mjs';
 
 const projectRoot = path.dirname(fileURLToPath(import.meta.url));
@@ -32,6 +33,9 @@ export default defineConfig({
         // This runs for every production build, including local builds.
         // A debug environment variable must never weaken the publish gate.
         validatePublicData();
+        // Race titles are manually approved and cannot come from provider
+        // metadata. Fail closed if an approval stops matching its public run.
+        validateCuratedRaces();
       },
     },
     react(),

@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "races": [
+    {
+      "activity": {
+        "date": "2025-11-09",
+        "distance_m": 4331.9,
+        "moving_time": "0:16:19"
+      },
+      "name": "Rotary Club de Oviedo — 5K",
+      "race_distance_m": 5000,
+      "official_time_seconds": null
+    }
+  ]
+}

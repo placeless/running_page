@@ -25,6 +25,7 @@ import { RouteMap } from '@/components/RouteMap';
 import { CalendarWidget } from '@/components/CalendarWidget';
 import { ProfileCard } from '@/components/ProfileCard';
 import { MatchedRunTimes } from '@/components/MatchedRunTimes';
+import { RaceRecords } from '@/components/RaceRecords';
 import { FootprintMap } from '@/components/FootprintMap';
 import { activityYear } from '@/core/domain/calendar';
 
@@ -230,6 +231,10 @@ function Dashboard() {
                   />
                 </div>
                 <MatchedRunTimes
+                  activities={activities}
+                  onSelectActivity={selectActivity}
+                />
+                <RaceRecords
                   activities={activities}
                   onSelectActivity={selectActivity}
                 />

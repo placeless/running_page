@@ -49,6 +49,12 @@ COROS Training Hub (private credentials)
 
 The browser **never** needs COROS credentials, original FITs, SQLite, or the private privacy policy. `src/static/activities.json` is a _public artifact_, not a secure database. A source record is published only through the privacy exporter; frontend filtering is **not** privacy protection.
 
+Activity titles are deliberately excluded from that automated export.
+Only individually reviewed race entries in `src/static/races.json` can
+display an approved event label and optional verified official time.
+The Dashboard keeps event distance, GPS distance and device moving time
+distinct. See [race records](docs/race-records.md).
+
 | Location                                   | Responsibility                                                         |
 | ------------------------------------------ | ---------------------------------------------------------------------- |
 | `src/App.tsx`, `src/main.tsx`              | Browser entry and theme registry                                       |

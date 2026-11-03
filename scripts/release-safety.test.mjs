@@ -43,6 +43,10 @@ test('unsafe JSON blocks production builds even with legacy bypass variable', as
         { name: 'synthetic raw metadata', start_date: '2026-01-01' },
       ])
     );
+    writeFileSync(
+      path.join(fixture, 'src/static/races.json'),
+      JSON.stringify({ version: 1, races: [] })
+    );
     execFileSync('git', ['init', '-q'], { cwd: fixture });
     execFileSync('git', ['add', 'src/static/activities.json'], {
       cwd: fixture,
@@ -53,6 +57,11 @@ test('unsafe JSON blocks production builds even with legacy bypass variable', as
 
     writeFileSync(path.join(fixture, 'src/static/activities.json'), '[]');
     assert.doesNotThrow(() => guard.buildStart());
+    writeFileSync(
+      path.join(fixture, 'src/static/races.json'),
+      JSON.stringify({ version: 2, races: [] })
+    );
+    assert.throws(() => guard.buildStart(), /race approval/i);
   } finally {
     process.chdir(cwd);
     if (oldOverride === undefined)

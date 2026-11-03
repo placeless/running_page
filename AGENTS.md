@@ -12,6 +12,7 @@
 - Do not read, use, leak, stage, commit, copy into tests, or log raw data from `private/`, `FIT_OUT/`, `GPX_OUT/`, `TCX_OUT/`, `PNG_OUT/`, `Workouts/`, `run_page/data.db`, import manifests or historical GPS objects unless the user specifically authorizes that action.
 - Always inspect `scripts/check-public-repository.mjs`, `scripts/validate-public-data.mjs`, and the Python privacy exporter before changing the publication pipeline. Do not bypass safeguards for a production build.
 - The safe front-end demo is `pnpm dev:sample` (`data/samples/activities.sample.json`). Synthetic route tests use **invented** coordinates; do not derive them from real activities.
+- The public `src/static/races.json` contains **manually approved** race labels only. Never copy unreviewed titles from private Strava/COROS records or estimate official race times from device distance/duration.
 - Public Mapbox tokens are browser-visible; secrets and COROS credentials remain in private GitHub Actions settings, not Vite environment values or tracked YAML.
 
 ## Refactor principles
