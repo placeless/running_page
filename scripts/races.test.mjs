@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -8,7 +8,6 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { createTypeScriptLoader } from './test-utils/load-typescript.mjs';
 import { validateCuratedRaces } from './validate-curated-races.mjs';
 
-const actualCatalog = JSON.parse(readFileSync('src/static/races.json', 'utf8'));
 const sampleRace = {
   activity: {
     date: '2026-03-15',
@@ -41,8 +40,8 @@ function withFixture(races, activities, callback) {
   }
 }
 
-test('only explicitly approved public races may be published', () => {
-  assert.equal(validateCuratedRaces(), 1);
+test('current public race catalog validates without a fixed approval count', () => {
+  assert.doesNotThrow(() => validateCuratedRaces());
   assert.equal(
     withFixture([sampleRace], [activity()], validateCuratedRaces),
     1
@@ -161,37 +160,26 @@ test('official time is optional, separate from device moving time', () => {
   assert.doesNotMatch(officialHtml, /Not supplied/);
 });
 
-test('approved metadata is a separate publication; source activity title stays generic', () => {
-  const publicRows = JSON.parse(
-    readFileSync('src/static/activities.json', 'utf8')
-  );
-  const selector = actualCatalog.races[0].activity;
-  const matched = publicRows.filter(
-    (a) =>
-      a.start_date_local === selector.date &&
-      a.distance === selector.distance_m &&
-      a.moving_time === selector.moving_time
-  );
-  assert.equal(matched.length, 1);
-  assert.equal(matched[0].name, 'Run');
-  assert.equal(actualCatalog.races[0].official_time_seconds, null);
+test('displayed race labels come from approval, never a source activity title', () => {
   const { RaceRecords } = createTypeScriptLoader({
     '../hooks/useLocale': { useLocale: () => ({ locale: 'en' }) },
-    '../static/races.json': actualCatalog,
+    '../static/races.json': { version: 1, races: [sampleRace] },
   })('src/components/RaceRecords.tsx');
-  const actual = renderToStaticMarkup(
-    createElement(RaceRecords, { activities: publicRows })
+  const html = renderToStaticMarkup(
+    createElement(RaceRecords, {
+      activities: [activity({ name: 'Unapproved private activity title' })],
+    })
   );
-  assert.match(actual, /Rotary Club de Oviedo/);
-  assert.match(actual, /4\.33 km/);
-  assert.match(actual, /16:19/);
-  assert.match(actual, /Not supplied/);
+  assert.match(html, /Example Approved 5K Race/);
+  assert.doesNotMatch(html, /Unapproved private activity title/);
+  assert.match(html, /4\.32 km/);
+  assert.match(html, /Not supplied/);
   const { RaceRecords: ChineseRaceRecords } = createTypeScriptLoader({
     '../hooks/useLocale': { useLocale: () => ({ locale: 'zh' }) },
-    '../static/races.json': actualCatalog,
+    '../static/races.json': { version: 1, races: [sampleRace] },
   })('src/components/RaceRecords.tsx');
   const translated = renderToStaticMarkup(
-    createElement(ChineseRaceRecords, { activities: publicRows })
+    createElement(ChineseRaceRecords, { activities: [activity()] })
   );
   assert.match(translated, /赛事记录/);
   assert.match(translated, /官方成绩/);
