@@ -106,5 +106,18 @@ Isolated replay against a **copy** of the 937-record private database
 restored all 20 sessions, yielding **957 private records** and **955
 privacy-safe public records** at the audited cutoff. Repeat import was
 idempotent, and all public route fields remained empty. The original private
-archive was not modified by the local replay. A production COROS sync must
-confirm these counts before treating the repair as deployed.
+archive was not modified by the local replay.
+
+**Production verification, 2026-11-03:** GitHub Actions Run Data Sync
+(`41554716491`) completed successfully. Its COROS query found 96 activity
+IDs and 96 existing FIT files; the updated importer loaded all **20**
+previously skipped Training sessions and backed the corrected SQLite up to
+the private archive. Independent read-only verification of the private
+repository found **957 activities**, including **20 new WeightTraining**
+sessions after the June 30 provider cutover. The public repository and
+`m.placeless.net` both served **955 records**, including 35 total
+WeightTraining sessions, with **zero route geometry**. For the 20 newly
+imported sessions, day/type counts matched the isolated Europe/Madrid
+replay exactly. The two October 31 and November 2 runs remain private under
+the calendar-date publication delay; November 1 had no activity in either
+the COROS FIT archive or the SQLite records.
