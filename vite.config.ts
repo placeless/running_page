@@ -27,8 +27,9 @@ export default defineConfig({
       name: 'public-activity-privacy-guard',
       apply: 'build',
       buildStart() {
+        // Never bundle ignored, locally generated personal SVGs.
+        checkPublicRepository();
         if (process.env.RUNNING_ALLOW_UNSAFE_LOCAL_PREVIEW !== '1') {
-          checkPublicRepository();
           validatePublicData();
         }
       },

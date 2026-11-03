@@ -301,6 +301,10 @@ Open your browser and visit localhost:80
 > 3. The build process automatically injects this token during GitHub Actions workflow execution
 > 4. You should NOT commit your token to the repository
 > For Cloudflare Git-connected builds, set `VITE_MAPBOX_TOKEN` in the Cloudflare build environment separately; GitHub Actions secrets are not forwarded automatically.
+> The `placeless/running_page` fork currently deploys its production dashboard
+> on **Vercel**, behind Cloudflare. Configure `VITE_MAPBOX_TOKEN` in Vercel's
+> build environment for this deployment; see
+> [deployment boundaries](docs/deployment-boundaries.md).
 >
 > **Priority Order**:
 > - GitHub Actions Secret (`MAPBOX_TOKEN` env var) takes priority
@@ -1227,6 +1231,11 @@ For more display effects, see:
 <summary> Use <code> Cloudflare </code> to deploy </summary>
 
 <br>
+
+For the `placeless` fork, `m.placeless.net` is the running_page dashboard;
+`placeless.net/running/` is a separate **Running, over time** experiment.
+These are independent applications, not alternative targets for a migration.
+See [fork deployment boundaries](docs/deployment-boundaries.md).
 
 1. Login to [Cloudflare dashboard](https://dash.cloudflare.com).
 

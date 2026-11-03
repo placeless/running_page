@@ -40,6 +40,11 @@ sections across a hidden place; the dashboard map renders all approved parts.
 The original recorded distance and duration remain unchanged, even when map
 geometry is reduced.
 
+The 2026-11-03 data-integrity review restored 25 legitimate zero-distance
+Workout/WeightTraining sessions previously excluded by the source loader.
+See [data-integrity reconciliation](data-integrity.md) for the audited
+937-private / 934-public record counts and the privacy delay.
+
 ## Configure locally without revealing locations
 
 1. Keep the original private database and FIT exports backed up outside the
@@ -90,7 +95,7 @@ geometry is reduced.
    Until this is done, the **normal production build deliberately fails** on
    the older, unsafe activity JSON. `RUNNING_ALLOW_UNSAFE_LOCAL_PREVIEW=1 pnpm
    build` is available strictly for local debugging. Never configure that
-   bypass on Cloudflare, CI or a public deployment.
+   bypass on Vercel, Cloudflare, CI or a public deployment.
 
 ## Move the raw database to a durable private GitHub repository
 
@@ -121,9 +126,12 @@ publication step stages only `src/static/activities.json`, never uses
 before committing the sanitized public JSON.
 
 This migration does **not** delete historical Git objects, fork copies,
-published Cloudflare deployments, downloaded archives or caches. History
+published Vercel deployments, downloaded archives or caches. History
 rewriting and deployment purge are a later, explicitly reviewed operation.
 Data that has already been distributed cannot be reliably recalled.
+For the verified 2026-11-02 exposure inventory, boundaries between shared
+upstream history and fork-specific data, and a non-destructive cleanup plan,
+see [Git history remediation](history-remediation.md).
 
 ## Limits and verification
 
@@ -142,3 +150,7 @@ Data that has already been distributed cannot be reliably recalled.
 - Generated map/route screenshots and separately published SVGs still require
   an explicit privacy audit. Automatic public SVG generation has been disabled;
   only allowlisted activity JSON is auto-committed.
+- Vite's legacy `assets/index.tsx` uses `import.meta.glob`. Even **ignored**
+  personal SVGs left in the local `assets/` folder would be bundled during
+  a local production build. The build guard now blocks this case; store old
+  generated graphics in an ignored `private/` folder outside `assets/`.

@@ -44,6 +44,7 @@ PUBLIC_SPORTS = frozenset(
         "Hike",
         "Swim",
         "Workout",
+        "WeightTraining",
         "VirtualRun",
         "TrailRun",
         "cycling",

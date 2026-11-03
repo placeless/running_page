@@ -4,6 +4,19 @@ This repository tracks [yihong0618/running_page](https://github.com/yihong0618/r
 while retaining personal activity data and deployment settings. The remotes
 are `origin` (placeless) and `upstream` (yihong0618).
 
+## Production deployment boundary
+
+This fork's dashboard is served at **https://m.placeless.net/**. The separate
+**Running, over time** experiment at **https://placeless.net/running/** is not
+part of this repository and must not be replaced, redeployed, or migrated by
+running_page maintenance. A custom hostname and a URL path are not competing
+deployment targets. The dashboard is served from **Vercel**, behind
+Cloudflare; the experiment uses an independent Cloudflare Worker Route and
+Pages project. Before changing deployment configuration, inspect the actual
+Vercel project, Cloudflare domains, and Worker Routes.
+Do not infer ownership from a historical README example or an upstream deploy
+guide. See [deployment boundaries](deployment-boundaries.md).
+
 ## Updating from upstream
 
 Do not synchronize the fork with GitHub's overwrite/sync button. It can lose
@@ -41,8 +54,10 @@ The `classic` theme remains available and can be restored by changing
 `config.yml` deliberately contains **no** Mapbox
 token: supply `VITE_MAPBOX_TOKEN` in the frontend build environment instead.
 GitHub Actions builds can obtain it from the `MAPBOX_TOKEN` repository secret;
-Cloudflare builds require that environment variable to be configured **in
-Cloudflare separately**. Restrict the token's allowed origins in Mapbox.
+Vercel production builds require `VITE_MAPBOX_TOKEN` to be configured in
+**Vercel** separately. Cloudflare Pages builds, if used independently, also
+require their own build environment variable. Restrict the token's allowed
+origins in Mapbox.
 
 ## Geography and maps
 
@@ -79,12 +94,14 @@ configure origin restrictions.
 tracked sensitive files; the archive is accessed through a repository-scoped
 SSH Deploy Key. See [privacy-first export](privacy-export.md). Until a private
 sensitive-zone policy is configured, only aggregate activity records are public.
+Historical Git data requires a separate review before any history rewrite;
+see [history remediation](history-remediation.md).
 
 The fork uses the upstream COROS Training Hub downloader, **not** the Strava
 API. `.github/workflows/run_data_sync.yml` selects `RUN_TYPE: coros`; its
 scheduled run remains daily. The downloader fetches FIT recordings and merges
 them into `run_page/data.db` and `src/static/activities.json`, which the
-Cloudflare-hosted frontend consumes after its existing Git deployment rebuild.
+Vercel-hosted frontend consumes after its existing Git deployment rebuild.
 No Cloudflare Worker, D1 database, Strava subscription or Strava OAuth token is
 needed to perform this sync.
 
@@ -131,7 +148,7 @@ Merge the maintenance branch to **master** and create both secrets before
 running **Actions → Run Data Sync → Run workflow** on `master`. Check that the
 COROS region is selected, activities are downloaded, and a new run exists in
 the output without duplicates around the cutoff. The workflow commits data to
-the repository if it changed; the GitHub-connected Cloudflare deployment
+the repository if it changed; the GitHub-connected Vercel deployment
 should then rebuild with the updated `src/static/activities.json`.
 
 Unchanged stats after a successful run may mean the COROS account has no

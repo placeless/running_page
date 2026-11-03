@@ -129,7 +129,11 @@ class Generator:
 
     def load(self):
         # if sub_type is not in the db, just add an empty string to it
-        query = self.session.query(Activity).filter(Activity.distance > 0.1)
+        # GPS workouts have distance; strength/general sessions legitimately
+        # have zero distance and must still count as completed activities.
+        query = self.session.query(Activity).filter(
+            (Activity.distance > 0.1) | Activity.type.in_(("Workout", "WeightTraining"))
+        )
         if self.only_run:
             query = query.filter(Activity.type == "Run")
 

@@ -77,6 +77,22 @@ def test_unknown_sport_metadata_cannot_be_used_as_private_text():
     assert public["subtype"] is None
 
 
+def test_zero_distance_weight_training_keeps_safe_sport_type():
+    source = example_activity()
+    source.update(
+        type="WeightTraining",
+        subtype="WeightTraining",
+        distance=0,
+        average_speed=0,
+        summary_polyline=None,
+    )
+    result = export_public_activities([source], now=NOW)[0]
+    assert result["name"] == result["type"] == "WeightTraining"
+    assert result["subtype"] == "WeightTraining"
+    assert result["distance"] == 0
+    assert result["route_segments"] == []
+
+
 def test_route_segments_break_at_private_zone_and_never_bridge():
     # Ends are far outside the circle; the route crosses the zone twice.
     points = [

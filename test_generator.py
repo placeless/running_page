@@ -35,6 +35,34 @@ def _activities():
     ]
 
 
+def test_load_includes_distance_free_training_without_zero_distance_runs(
+    generator, tmp_path
+):
+    app = generator.Generator(tmp_path / "activities.db")
+    try:
+        for id_, sport in enumerate(("Run", "Workout", "WeightTraining"), start=1):
+            date = f"2026-01-0{id_} 12:00:00"
+            app.session.add(
+                generator.Activity(
+                    run_id=id_,
+                    distance=0.0,
+                    type=sport,
+                    start_date=date,
+                    start_date_local=date,
+                )
+            )
+        app.session.commit()
+        result = app.load()
+        assert [item["type"] for item in result] == [
+            "Workout",
+            "WeightTraining",
+        ]
+        assert all(item["distance"] == 0 for item in result)
+    finally:
+        app.session.close()
+        app.session.bind.dispose()
+
+
 @pytest.mark.parametrize("subtype", ["Run", "treadmill", "indoor"])
 @pytest.mark.parametrize("filter_before_saving", [False, True])
 def test_load_preserves_source_routes_and_missing_gps(

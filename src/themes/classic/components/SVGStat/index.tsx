@@ -18,6 +18,9 @@ const SVGStat = () => {
     return () => clearTimeout(timer);
   }, []);
 
+  // Public privacy-safe builds do not ship the generated statistics SVGs.
+  if (!totalStat['./github.svg'] && !totalStat['./grid.svg']) return null;
+
   return (
     <div id="svgStat">
       <Suspense fallback={<div className="text-center">Loading...</div>}>
