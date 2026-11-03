@@ -7,15 +7,14 @@ conceal GPS coordinates present in a browser-downloaded JSON file.
 
 ## Data boundary
 
-| Source                                         | Ownership              | Permitted in the public repo? |
-| ---------------------------------------------- | ---------------------- | ----------------------------- |
-| COROS credentials, raw FIT, GPX, TCX           | Private archive        | **No**                        |
-| Original `run_page/data.db`                    | Private archive        | **No**                        |
-| `PNG_OUT/`, `Workouts/` and personal posters   | Private generated      | **No**                        |
-| `private/privacy.json` (home/work/other zones) | Private configuration  | **No**                        |
-| Validated `src/static/activities.json`         | Public export          | Yes                           |
-| Reviewed `src/static/races.json`               | Manual public approval | Yes, explicitly selected      |
-| Code, non-sensitive map boundaries and tests   | Public repository      | Yes                           |
+| Source                                         | Ownership             | Permitted in the public repo? |
+| ---------------------------------------------- | --------------------- | ----------------------------- |
+| COROS credentials, raw FIT, GPX, TCX           | Private archive       | **No**                        |
+| Original `run_page/data.db`                    | Private archive       | **No**                        |
+| `PNG_OUT/`, `Workouts/` and personal posters   | Private generated     | **No**                        |
+| `private/privacy.json` (home/work/other zones) | Private configuration | **No**                        |
+| Validated `src/static/activities.json`         | Public export         | Yes                           |
+| Code, non-sensitive map boundaries and tests   | Public repository     | Yes                           |
 
 During the November 2026 cutover, the original database, FIT files, import
 manifest, historical public JSON and 31 generated SVGs were backed up in
@@ -40,14 +39,6 @@ hold. The environment override changes **only** the delay; it retains the
 private Secret's route mode, protected zones and endpoint trimming.
 Positive delay settings remain supported and conservatively include an
 extra 24-hour margin when comparing date-only activities.
-
-**Race titles use a separate explicit approval boundary.** The private
-SQLite `activities.name` may retain titles edited in Strava or COROS, but
-those strings are never exported automatically. The Dashboard reads a
-hand-reviewed `src/static/races.json` for selected event labels and optional
-verified official times. It includes no source identifiers, precise GPS,
-addresses or automatically inferred official results. Every approved entry
-must match exactly one already-public activity. See [race-records.md](race-records.md).
 
 **Missing private policy means aggregate-only output, with no GPS.** Enabling
 GPS requires an explicit private file with one or more protection circles.

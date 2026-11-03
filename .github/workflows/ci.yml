@@ -68,7 +68,6 @@ jobs:
         run: |
           node scripts/check-public-repository.mjs
           node scripts/validate-public-data.mjs
-          node scripts/validate-curated-races.mjs
           node scripts/validate-public-data.mjs data/samples/activities.sample.json
           node --test scripts/*.test.mjs
           pnpm run check

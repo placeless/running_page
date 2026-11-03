@@ -29,7 +29,6 @@ Run `pnpm dev` to view the already-validated public snapshot instead. To run Pyt
 ## Privacy, credentials and publication
 
 - **Never commit:** GPS source files, raw FIT/GPX/TCX, SQLite, import manifests, private policies or zones, personal images, auth tokens, cookies or actual location test data.
-- Do not import raw provider activity titles into the public UI. Only explicitly reviewed events may be added to the public race catalog, with a separately verified official time when available. See [race records](docs/race-records.md).
 - Use `data/samples/activities.sample.json` and synthetic route tests. The public-data schema check is intentionally strict; **do not disable the Vite privacy guard**.
 - COROS synchronization, private archive operations, history rewriting, GitHub workflows and production deploys have separate privileges. A source-code PR must not trigger an unsolicited sync against a private account.
 - Fork-specific automated sync is currently COROS only; other provider scripts are legacy upstream integrations, not maintained CI paths.
