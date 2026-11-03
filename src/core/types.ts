@@ -18,7 +18,6 @@ export interface Activity {
   average_heartrate: number | null;
   average_speed: number; // m/s
   elevation_gain: number | null;
-  source: string;
   streak: number;
 }
 

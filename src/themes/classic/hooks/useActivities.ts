@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import type { Activity } from '../utils/utils';
 import { locationForRun, titleForRun } from '../utils/utils';
 import { getActivityData } from '@core/hooks/useActivities';
-import { COUNTRY_STANDARDIZATION } from '../static/city';
+import { COUNTRY_STANDARDIZATION } from '@/static/city';
 
 interface ProcessedActivities {
   activities: Activity[];

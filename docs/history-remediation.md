@@ -26,17 +26,17 @@ offline Git bundle, the reviewed snapshot was restored to a fresh isolated
 clone using a single fork-range `git-filter-repo` pass. The immutable shared
 upstream merge-base `3bec7208` was preserved.
 
-| Evidence | Result |
-| --- | --- |
-| Old `placeless/running_page` HEAD | `77244ec0` |
-| Rewritten `master` pushed to **origin only** | `b32ef746` |
-| Approved paths, mode and byte comparison | **217**, no differences |
-| Original fork-range candidate-sensitive objects | 3,424 |
-| Old candidate-sensitive objects reachable from the new `master`, excluding approved current public blobs | **0** |
-| Privacy-checked public activities | **934**; zero route geometry |
-| Python tests / TypeScript / Vite / ESLint | **56 passed** / pass / pass / pass |
-| Remote branches / PRs / direct child forks | 1 / 0 / 0 |
-| Push safety | Explicit `--force-with-lease` against the old SHA; upstream untouched |
+| Evidence                                                                                                 | Result                                                                |
+| -------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Old `placeless/running_page` HEAD                                                                        | `77244ec0`                                                            |
+| Rewritten `master` pushed to **origin only**                                                             | `b32ef746`                                                            |
+| Approved paths, mode and byte comparison                                                                 | **217**, no differences                                               |
+| Original fork-range candidate-sensitive objects                                                          | 3,424                                                                 |
+| Old candidate-sensitive objects reachable from the new `master`, excluding approved current public blobs | **0**                                                                 |
+| Privacy-checked public activities                                                                        | **934**; zero route geometry                                          |
+| Python tests / TypeScript / Vite / ESLint                                                                | **56 passed** / pass / pass / pass                                    |
+| Remote branches / PRs / direct child forks                                                               | 1 / 0 / 0                                                             |
+| Push safety                                                                                              | Explicit `--force-with-lease` against the old SHA; upstream untouched |
 
 The working checkout was reset to the new `origin/master` **after preserving
 its previous local edits**. Existing legacy local branches and old clones
@@ -57,17 +57,17 @@ There are **zero affected pull requests** and **zero direct child forks** by
 the current repository API audit. Do not include raw coordinates, credentials,
 or private files in the support request. Support assistance is discretionary.
 
-| Read-only finding | Result |
-| --- | ---: |
-| Local `master` history | 1,825 commits |
-| Fork-specific commits relative to `upstream/master` | 550 |
-| Distinct GPS/database paths touched by fork-only commits | 96 |
-| Distinct generated route SVG paths touched by fork-only commits | 20 |
-| Distinct GPS/database paths touched anywhere in local `master` history | 137 |
-| GitHub repository | Public Fork of `yihong0618/running_page` |
-| Direct child forks / PRs | 0 / 0 (GitHub API) |
-| GitHub Actions caches | 9; keys appear to be Node/Python dependencies |
-| GitHub Actions artifacts / Releases / GitHub Pages site | 0 / 0 / not configured |
+| Read-only finding                                                      |                                        Result |
+| ---------------------------------------------------------------------- | --------------------------------------------: |
+| Local `master` history                                                 |                                 1,825 commits |
+| Fork-specific commits relative to `upstream/master`                    |                                           550 |
+| Distinct GPS/database paths touched by fork-only commits               |                                            96 |
+| Distinct generated route SVG paths touched by fork-only commits        |                                            20 |
+| Distinct GPS/database paths touched anywhere in local `master` history |                                           137 |
+| GitHub repository                                                      |      Public Fork of `yihong0618/running_page` |
+| Direct child forks / PRs                                               |                            0 / 0 (GitHub API) |
+| GitHub Actions caches                                                  | 9; keys appear to be Node/Python dependencies |
+| GitHub Actions artifacts / Releases / GitHub Pages site                |                        0 / 0 / not configured |
 
 Path counts represent distinct names found in Git logs, **not** confirmed
 personal route files or the count of historical blobs. Shared upstream
@@ -108,18 +108,18 @@ history. Both file contents **and Git modes** were compared with the approved
 snapshot, including the one tracked symlink. The result is reproducible
 without replacing the upstream shared ancestor.
 
-| Validation | Single-pass candidate |
-| --- | --- |
-| Shared upstream merge-base | `3bec7208`, unchanged |
-| Fork-specific commits before / after filtering | 550 / 20 |
-| Fork-specific commits after approved snapshot commit | 21 |
-| Approved latest paths | 216 (0 missing, 0 extra) |
-| Path content or Git file-mode differences | **0** |
-| Old named candidate-sensitive object IDs | 3,424 |
-| Previously identified candidate-sensitive object IDs still reachable, apart from two approved current public blobs | **0** |
-| Public JSON check | 909 activities, with no route geometries |
-| TypeScript, Vite, Prettier, ESLint, Python tests | Pass; 54 Python tests |
-| Bundled legacy personal SVG JavaScript chunks | 0 |
+| Validation                                                                                                         | Single-pass candidate                    |
+| ------------------------------------------------------------------------------------------------------------------ | ---------------------------------------- |
+| Shared upstream merge-base                                                                                         | `3bec7208`, unchanged                    |
+| Fork-specific commits before / after filtering                                                                     | 550 / 20                                 |
+| Fork-specific commits after approved snapshot commit                                                               | 21                                       |
+| Approved latest paths                                                                                              | 216 (0 missing, 0 extra)                 |
+| Path content or Git file-mode differences                                                                          | **0**                                    |
+| Old named candidate-sensitive object IDs                                                                           | 3,424                                    |
+| Previously identified candidate-sensitive object IDs still reachable, apart from two approved current public blobs | **0**                                    |
+| Public JSON check                                                                                                  | 909 activities, with no route geometries |
+| TypeScript, Vite, Prettier, ESLint, Python tests                                                                   | Pass; 54 Python tests                    |
+| Bundled legacy personal SVG JavaScript chunks                                                                      | 0                                        |
 
 The content-oriented screening inspected 124 eligible historical text blobs
 in the Fork-specific revision range and 114 in the rewritten candidate.
@@ -152,18 +152,18 @@ personal SVGs, the sync workflow (including a legacy encoded-polyline setting)
 and `config.yml`. The shared
 upstream commit `3bec7208` remained unchanged.
 
-| Validation | Isolated trial result |
-| --- | --- |
-| Fork-only commits before rewrite | 550 |
-| Fork-only commits immediately after filtering | 22 |
-| Additional safe restoration and removal commits | 2 |
-| Paths still present after filtering and needing a new removal commit | 23 (4 activity/source files and 19 generated SVGs) |
-| Original potentially sensitive path objects from the Fork-specific range | 3,416 distinct Git object IDs |
-| Such objects reachable from the proposed new `master`, excluding the two validated current public snapshot blobs | **0** |
-| Current publicly tracked file content compared with the working source | 216 paths, no differences |
-| Privacy index and public JSON checks | Pass; 909 public activities, zero route geometries |
-| TypeScript / Vite build / Python regression suite | Pass / Pass / 54 passed |
-| Isolated clone after removing obsolete remote ref, expiring reflogs and running Git GC | One `master` ref, `git fsck` clean, packed data 646.48 MiB → 45.88 MiB |
+| Validation                                                                                                       | Isolated trial result                                                  |
+| ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Fork-only commits before rewrite                                                                                 | 550                                                                    |
+| Fork-only commits immediately after filtering                                                                    | 22                                                                     |
+| Additional safe restoration and removal commits                                                                  | 2                                                                      |
+| Paths still present after filtering and needing a new removal commit                                             | 23 (4 activity/source files and 19 generated SVGs)                     |
+| Original potentially sensitive path objects from the Fork-specific range                                         | 3,416 distinct Git object IDs                                          |
+| Such objects reachable from the proposed new `master`, excluding the two validated current public snapshot blobs | **0**                                                                  |
+| Current publicly tracked file content compared with the working source                                           | 216 paths, no differences                                              |
+| Privacy index and public JSON checks                                                                             | Pass; 909 public activities, zero route geometries                     |
+| TypeScript / Vite build / Python regression suite                                                                | Pass / Pass / 54 passed                                                |
+| Isolated clone after removing obsolete remote ref, expiring reflogs and running Git GC                           | One `master` ref, `git fsck` clean, packed data 646.48 MiB → 45.88 MiB |
 
 The 23 residual paths illustrate a critical limitation: **restricting the
 rewrite to the Fork range does not erase files inherited from shared
@@ -199,15 +199,15 @@ token in that file; a public token is not a server secret, but historical
 versions are still discoverable and should be origin-restricted or rotated
 as appropriate.
 
-Despite zero occurrences of this path in the *rewritten Fork-only object
-range*, the second pass restored `src/utils/const.ts` to the latest file
+Despite zero occurrences of this path in the _rewritten Fork-only object
+range_, the second pass restored `src/utils/const.ts` to the latest file
 tree. The second candidate contained **217 tracked files** instead of the
 approved 216. The index privacy guard did not reject it: it checks private
 source formats and generated assets, not historical public Mapbox tokens.
 This second candidate is **rejected** and must not be pushed. The original
 first-pass candidate remains isolated and unchanged.
 
-**New required release invariant:** after *every* filter invocation,
+**New required release invariant:** after _every_ filter invocation,
 compare the **entire latest tracked path set and file contents** against
 the approved 216-file public snapshot before proceeding to tests.
 Then examine old-blob reachability and clean the inherited latest tree
@@ -266,6 +266,7 @@ all embedded historical credentials or coordinates have been inspected.
   remaining. At that checkpoint, the production target still pointed to commit
   `77244ec0` and retains the `m.placeless.net` alias. The domain returned
   HTTP 200 after cleanup; a checked deleted deployment URL returned 404.
+
 - **GitHub cache retention:** changing `master` does not necessarily
   remove old SHA-linked views, PR references or historical cached objects.
   Follow GitHub's official sensitive-data procedure after an authorized
@@ -293,7 +294,7 @@ replaced by the reduced public export.
 ## Original execution checklist (completed where noted)
 
 1. **Freeze publication.** Temporarily suspend the scheduled public-sync
-   workflow and Vercel auto-deploys *when execution is authorized*, and
+   workflow and Vercel auto-deploys _when execution is authorized_, and
    coordinate with any collaborators. First verify the complete raw-data
    backup in the separate private repository. Preserve a local offline
    recovery backup that is never published.
@@ -303,18 +304,18 @@ replaced by the reduced public export.
    Re-check fork count and PRs immediately before a rewrite. Inspect actual
    historical blobs and messages for sensitive locations or credentials,
    without printing them in CI logs or documentation.
-3. **Prototype in an isolated clone.** *(Single-pass candidate validated;
-   older two-pass candidate rejected; see results above.)*
+3. **Prototype in an isolated clone.** _(Single-pass candidate validated;
+   older two-pass candidate rejected; see results above.)_
    Evaluate `git-filter-repo` on the
    fork-specific commit range, leaving the upstream merge-base untouched.
    Candidate removals include FIT/GPX/TCX files, SQLite databases, import
-   manifests, personalized generated SVGs, *historical* raw activity JSON,
+   manifests, personalized generated SVGs, _historical_ raw activity JSON,
    and any encoded protected locations in tracked configuration. Preserve
    unrelated upstream changes. Restricting `--refs` produces a **partial**
    rewrite and requires checking every ref that may retain old commits; the
    first attempt must not target the live checkout.
-4. **Restore the approved export.** *(Completed in first trial; repeat after
-   every rewrite pass.)* If filtering removes
+4. **Restore the approved export.** _(Completed in first trial; repeat after
+   every rewrite pass.)_ If filtering removes
    `src/static/activities.json` entirely, restore only the currently validated
    public export as a new commit in the isolated clone. Check that the
    resulting branch still builds, syncs, renders and merges reasonably with
@@ -334,8 +335,8 @@ replaced by the reduced public export.
    fork's `origin` (never `upstream`), verify the public refs, and prevent the
    older clones or sync workflow from reintroducing old objects. Resume sync
    only after the private archive and privacy-export guards pass.
-7. **Purge other exposure surfaces.** *(Nine risky historical Vercel
-   deployments deleted, three safe versions preserved on 2026-11-03.)*
+7. **Purge other exposure surfaces.** _(Nine risky historical Vercel
+   deployments deleted, three safe versions preserved on 2026-11-03.)_
    Check Cloudflare proxy caching and the
    `m.placeless.net` custom-domain mapping separately; the unrelated
    Cloudflare Pages applications are outside scope. Inspect GitHub Actions
@@ -344,6 +345,20 @@ replaced by the reduced public export.
    for eligible sensitive-data cached views and unreachable objects. Old
    clones, forks and downloaded copies cannot be recalled by Git rewriting.
    Treat `placeless.net/running/` as a separate audit, not a deployment target.
+
+## Batch 4 current-index cleanup (2026-11-03)
+
+Two historical `PNG_OUT/share_image_*.png` files (generated by the old
+`run_page/auto_share_sync.py` path) were removed **from the current Git
+index only** and added to the generated-assets denylist. The physical files
+were deliberately preserved locally, and no byte-level content review was
+performed. This is a precaution against sharing personal activity graphics,
+not evidence that those particular images contained precise GPS locations.
+The deprecated Docker pipeline, which embedded data sync and generated
+personal SVGs during image builds, and the optional GitHub Pages publisher
+were also removed. The prior PNG commits, third-party caches and deployment
+artifacts **remain separate exposure surfaces**. No history rewriting or
+force push was performed in this refactor batch.
 
 ## Post-migration guardrails
 

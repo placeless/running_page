@@ -1,224 +1,134 @@
-# Maintaining the placeless fork
+# Maintaining the placeless Running Page fork
 
-This repository tracks [yihong0618/running_page](https://github.com/yihong0618/running_page)
-while retaining personal activity data and deployment settings. The remotes
-are `origin` (placeless) and `upstream` (yihong0618).
+This repository is the maintained `placeless/running_page` fork of
+[yihong0618/running_page](https://github.com/yihong0618/running_page).
+This page describes the **current executable fork paths**, not upstream's
+multi-provider examples. See [README](../README.md) for a contributor overview.
 
-## Production deployment boundary
+## Deployment and ownership
 
-This fork's dashboard is served at **https://m.placeless.net/**. The separate
-**Running, over time** experiment at **https://placeless.net/running/** is not
-part of this repository and must not be replaced, redeployed, or migrated by
-running_page maintenance. A custom hostname and a URL path are not competing
-deployment targets. The dashboard is served from **Vercel**, behind
-Cloudflare; the experiment uses an independent Cloudflare Worker Route and
-Pages project. Before changing deployment configuration, inspect the actual
-Vercel project, Cloudflare domains, and Worker Routes.
-Do not infer ownership from a historical README example or an upstream deploy
-guide. See [deployment boundaries](deployment-boundaries.md).
+- **Public dashboard:** `https://m.placeless.net/` is built from this Git
+  repository by **Vercel**, with Cloudflare proxying the hostname.
+- **Independent experiment:** `https://placeless.net/running/` belongs to a
+  separate Cloudflare Workers/Pages application and must not be modified.
+- **Public frontend:** React/Vite builds `dist/` from `config.yml` and the
+  validated `src/static/activities.json`. The browser has no private FIT,
+  SQLite database, route policy or COROS credentials.
+- **Private source:** the independent `placeless/running-data-private`
+  repository stores original FIT and SQLite. Only the sanitized JSON is
+  published. Do not infer visibility from `.gitignore` or UI hiding.
+- **Legacy deployment:** the GitHub Pages workflow and insecure Docker image
+  generator were removed. This fork no longer publishes those adapters.
 
-## Updating from upstream
+See [deployment boundaries](deployment-boundaries.md), [privacy export](privacy-export.md)
+and [history remediation](history-remediation.md).
 
-Do not synchronize the fork with GitHub's overwrite/sync button. It can lose
-local modifications, generated files or conflict resolutions. Merge and
-validate upstream changes on a review branch instead:
+## Scheduled COROS sync
+
+`.github/workflows/run_data_sync.yml` is now a **COROS-only** writer, scheduled
+at **00:00 UTC every day** and manually dispatchable on `master`. It:
+
+1. Confirms the private archive is configured and the public Git index has
+   no forbidden files.
+2. Restores the private archive's `data.db`, FIT cache and import manifest to
+   the ephemeral runner.
+3. Loads the private publication policy, then fetches COROS activities on or
+   after **2026-06-30**, refreshing recent FITs for seven calendar days.
+4. Imports FIT into SQLite; exports **only** the privacy-allowlisted public
+   activity JSON, with the current `RUNNING_PRIVACY_DELAY_HOURS=0` policy.
+5. Checks the public export and reconciles provider/FIT/import/SQLite/public
+   totals without logging original activity IDs or coordinates.
+6. Commits all changed raw files **only** to the private archive, then commits
+   only `src/static/activities.json` to the public `master` branch.
+
+Workflow concurrency prevents two writers from racing; a failing phase stops
+publication. The Vercel build runs after its connected Git repository updates,
+not as a separate Actions deployment step. Source scripts for Strava, Garmin,
+Nike and others are still present for _manual/upstream interoperability_; none
+are selectable through this fork's scheduled workflow. Do not reintroduce
+multi-provider secret command-line invocations in a public CI job.
+
+### Required GitHub Actions settings
+
+| Name                           | Kind              | Purpose                                                                   |
+| ------------------------------ | ----------------- | ------------------------------------------------------------------------- |
+| `COROS_ACCOUNT`                | Secret            | Training Hub account                                                      |
+| `COROS_PASSWORD`               | Secret            | Raw COROS password; the downloader derives the expected login digest      |
+| `RUNNING_PRIVATE_REPOSITORY`   | Variable          | Must match this fork's pinned `placeless/running-data-private`            |
+| `RUNNING_PRIVATE_DEPLOY_KEY`   | Secret            | SSH private key of a **write-enabled deploy key for that single archive** |
+| `RUNNING_PRIVACY_POLICY_JSON`  | Secret            | Private privacy policy; never store sensitive zones in this repository    |
+| `COROS_DOWNLOAD_ALLOWED_HOSTS` | Optional variable | Comma-separated signed storage hosts, verified privately before pinning   |
+
+The archive's fixed repository identifier is intentional: a different user
+forking the project must review this trust boundary and explicitly replace the
+pin. The public workflow cannot run securely with only COROS credentials.
+The Vercel project's `VITE_MAPBOX_TOKEN`, if desired, is configured
+**separately** and is a restricted **public browser token**, not an ingestion
+secret. GitHub Actions secrets are not automatically passed to Vercel.
+
+To test COROS locally, install Python 3.12+ dependencies, then use environment
+variables without putting credentials in shell history or command-line
+arguments. Preserve original FIT/SQLite in an independent private backup;
+never point the exporter at the tracked public JSON until its validation has
+passed against a temporary file.
+
+### Cutover and data integrity
+
+The `2026-06-30` cutoff protects against duplicate historic Strava and COROS
+records that use unrelated provider IDs. Removing it requires a deliberate,
+validated deduplication and private backfill plan; it is **not** a fix for
+missing records. Individual zero-distance strength workouts are supported,
+while zero-distance runs remain excluded. `RUNNING_FIT_TIMEZONE` is set to
+`Europe/Madrid` as a fallback for FIT sessions with no authoritative local
+date. The current sync publishes all recorded dates through today's UTC date
+(`RUNNING_PRIVACY_DELAY_HOURS=0`); changing it does not alter redaction zones.
+
+The COROS downloader uses an authenticated API client and a separate anonymous
+HTTPS downloader for signed FIT links. Optional exact-host allowlisting should
+be enabled **only after private verification** of real storage hosts; the
+provider can use different regions and redirects. The provider list and the
+import manifest do not alone establish archival completeness. The aggregate
+auditor's optional `--deep-fit` mode performs more expensive FIT-to-SQLite
+identity checks. See [data integrity](data-integrity.md) for what has actually
+been verified and what remains unknown.
+
+## Updating upstream safely
+
+The `upstream` remote is **read/fetch only**; the fork's `origin` owns the
+maintained branch. Never use GitHub's unreviewed overwrite/sync function or
+force-push historical backup refs. Start with a clean checkout and review
+upstream on a separate branch:
 
 ```sh
-git status --short                 # must be clean
+git status --short
 git fetch origin master
 git fetch upstream master
 git switch master
-git merge --ff-only origin/master  # catch up with automated data commits
+git merge --ff-only origin/master
 git switch -c maintenance/upstream-YYYY-MM
 git merge upstream/master
 ```
 
-During conflict resolution, retain the **fork's** versions of
-`src/static/activities.json` (only after validating its public privacy schema)
-and reviewed, non-sensitive `assets/*.svg`. Deleted historical SVGs do not need
-to be restored; the data generator creates current assets. Keep original
-SQLite and GPS files in the **private archive**, not in public Git. For source
-conflicts, adopt the upstream code structure and reapply personal behavior in
-`src/themes/classic/`, `config.yml`, and
-`.github/workflows/run_data_sync.yml`. Do not reintroduce deleted pre-3.0
-component paths.
+Resolve integration conflicts against **current imports and behavior**. Keep
+the privacy-export boundary, the validated public JSON, private archive
+ownership and Vercel deployment. Do not restore deleted raw GPS assets,
+unsafe Docker/Pages publishing, or the old credentialed multi-provider sync
+workflow. Re-run Node, Python, privacy, production build and synthetic route
+tests, then review and merge through the fork's `master` only when authorized.
+The `dashboard` theme is the default; `classic` remains a supported optional
+theme via `config.yml`.
 
-Review `git diff --check`, `pnpm install --frozen-lockfile`,
-`pnpm run build`, and applicable Python checks. Then open a PR from the
-maintenance branch against `master`. Merge only after verifying routes,
-yearly statistics, map rendering and the generated activity data.
+## Map and geography notes
 
-The fork defaults to the upstream `dashboard` theme as of November 2026.
-The `classic` theme remains available and can be restored by changing
-`theme_preset` in `config.yml` back to `classic` and rebuilding.
-`config.yml` deliberately contains **no** Mapbox
-token: supply `VITE_MAPBOX_TOKEN` in the frontend build environment instead.
-GitHub Actions builds can obtain it from the `MAPBOX_TOKEN` repository secret;
-Vercel production builds require `VITE_MAPBOX_TOKEN` to be configured in
-**Vercel** separately. Cloudflare Pages builds, if used independently, also
-require their own build environment variable. Restrict the token's allowed
-origins in Mapbox.
+`run_page/generator/geography.py` classifies public coarse country/province
+values using local boundaries where possible; unknown locations stay unknown.
+`src/core/routeGeometry.ts` and related helpers process **already-redacted**
+route segments without bridging gaps around protected places. Dashboard maps
+load Mapbox (when configured) or MapLibre/CARTO on demand and can fall back to
+plain geometry. City/region data has one shared canonical module.
+The Spanish province dataset and attribution are documented at
+`run_page/generator/data/README.md`.
 
-## Geography and maps
-
-Activity `location_country` is raw provider data, not a trustworthy normalized
-country. Some historical activities labelled `United States` have GPS starts
-in China or Spain. At export time `run_page/generator/geography.py` derives
-`country_code` (ISO alpha-2) from the route start and `region` from offline
-Chinese province and Spanish province boundaries. Original location and GPS
-remain unchanged **only in the private source database**. The public exporter
-discards raw addresses and suppresses or clips GPS geometry. Unlocatable activities are not assigned an
-invented country or province; activities in other countries can be assigned a
-country without a province. This requires no Nominatim requests in CI. The
-Spanish source/attribution is documented in `run_page/generator/data/README.md`.
-
-The dashboard shows a world footprint view (click a country to filter, click
-China for province-level boundaries) and an independent GPS route map. The
-route map chooses its initial camera from the activity distribution: when at
-least 5% (and at least three) of the tracks start over 1,200 km from the most
-recent mapped activity, it shows the world with route-count clusters; otherwise
-it fits the routes in the current filter. The **Region / World** control
-switches between all routes and the latest running region (within 250 km),
-without changing the route filter itself. Selecting a single activity always
-fits that route. The map uses Mapbox GL JS when a Mapbox token is configured;
-without a token or after a Mapbox failure it uses MapLibre GL JS to render
-CARTO. If external basemaps fail, MapLibre displays GPS routes against a plain
-background. Mapbox GL JS v2+ cannot act as a token-free CARTO fallback.
-Mapbox access tokens are **public browser tokens**, not server secrets;
-configure origin restrictions.
-
-## Run Data Sync: COROS (November 2026 cutover)
-
-**Privacy-first publication:** Original FIT and SQLite data are archived in
-`placeless/running-data-private`. Public builds reject raw source records or
-tracked sensitive files; the archive is accessed through a repository-scoped
-SSH Deploy Key. See [privacy-first export](privacy-export.md). Until a private
-sensitive-zone policy is configured, only aggregate activity records are public.
-Fork `master` history was cleaned on 2026-11-03; old local backup branches
-and clones must never be merged back into `master` because they may
-reintroduce private GPS data. GitHub cached-view cleanup still requires
-Support review; see [history remediation](history-remediation.md).
-
-The fork uses the upstream COROS Training Hub downloader, **not** the Strava
-API. `.github/workflows/run_data_sync.yml` selects `RUN_TYPE: coros`; its
-scheduled run remains daily. The downloader fetches FIT recordings and merges
-them into `run_page/data.db` and `src/static/activities.json`, which the
-Vercel-hosted frontend consumes after its existing Git deployment rebuild.
-No Cloudflare Worker, D1 database, Strava subscription or Strava OAuth token is
-needed to perform this sync.
-
-The sync now includes an aggregate-only reconciliation step. A private,
-ephemeral COROS index is compared with downloaded FIT files, the private
-import manifest, read-only SQLite counts, and privacy-filtered public
-totals. Discrepancies in public data block publication; FIT inventory gaps
-are surfaced as warnings. See [data-integrity.md](data-integrity.md).
-
-The sync workflow is serialized across scheduled and manual runs to avoid
-concurrent writes to the private archive and public branch. Original FIT/GPX/
-SQLite data is never saved to GitHub Actions Cache; the optional GitHub Pages
-workflow caches only its package-manager dependencies. The generic upstream
-README's raw-data cache toggle does not apply to this fork.
-
-The COROS API client is authenticated, but signed FIT files are retrieved by
-a **separate, anonymous HTTPS client**. File URLs and redirects must pass
-public-host checks, and file downloads are size-limited. Storage hosts can vary
-by COROS region and provider, so the downloader does not assume a fixed
-domain. To require an exact-domain allowlist after verifying the observed
-signed URL's host, add a repository Actions **variable**
-`COROS_DOWNLOAD_ALLOWED_HOSTS` containing comma-separated hostnames (or
-set the environment variable locally). Do not set it to an unverified hostname
-or commit signed URLs to the public repository.
-
-### One-time setup (GitHub)
-
-In the **placeless/running_page** repository, go to **Settings → Secrets and
-variables → Actions → New repository secret** and create:
-
-- `COROS_ACCOUNT`: COROS Training Hub login (email/account).
-- `COROS_PASSWORD`: your COROS account's **raw password**. The Python script
-  performs COROS's expected MD5 conversion locally before calling its login
-  endpoint. Do not pre-hash the secret.
-
-Credentials must be GitHub Actions Secrets, not checked into the repository,
-not stored in `config.yml`, and not supplied as shell command arguments in
-CI. You can run locally without exposing the password in shell history:
-
-```sh
-read -r COROS_ACCOUNT
-read -rs COROS_PASSWORD; echo
-export COROS_ACCOUNT COROS_PASSWORD
-python run_page/coros_sync.py --since 2026-06-30
-unset COROS_ACCOUNT COROS_PASSWORD
-```
-
-The local database currently contains **861** Strava activities (836 with
-positive distance appear in the frontend JSON). Its last activity starts on
-**2026-06-29**. The `COROS_SYNC_SINCE: '2026-06-30'` cutoff deliberately prevents
-duplicate activities from different providers' unrelated IDs. To backfill
-earlier dates, first develop and validate a cross-provider deduplication plan;
-simply removing `--since` will double-count some workouts. FIT exports are
-cached in `FIT_OUT/` to avoid re-downloading known IDs.
-
-The upstream downloader uses undocumented Training Hub endpoints. This fork
-checks the EU, global and CN region hosts by probing authenticated activity
-access rather than assuming the region from successful login alone. Any
-unrecognized activity-list response or download transport failure fails the
-workflow instead of publishing an apparently successful but empty sync.
-Individual activities without an available FIT export are reported/skipped.
-
-### Activate and verify
-
-Merge the maintenance branch to **master** and create both secrets before
-running **Actions → Run Data Sync → Run workflow** on `master`. Check that the
-COROS region is selected, activities are downloaded, and a new run exists in
-the output without duplicates around the cutoff. The workflow commits data to
-the repository if it changed; the GitHub-connected Vercel deployment
-should then rebuild with the updated `src/static/activities.json`.
-
-Unchanged stats after a successful run may mean the COROS account has no
-activity at/after the cutoff, the new sport has no FIT export, or deployment
-did not pick up the committed data. Check the action log and generated JSON
-before changing the cutoff. Keep the old Strava secrets until the COROS
-integration has been validated; they are unused in the COROS branch.
-
-### Historical incident: Strava 403 / Application Inactive
-
-The 2026-11-02 workflow failed while fetching activities:
-
-```text
-403 Forbidden: Application / Status / Inactive
-```
-
-This is **not** an expired refresh token: the OAuth refresh succeeded first.
-Since June 2026, Strava requires the owner of a Standard Tier API application
-to have an eligible active Strava subscription. The **account owning the API
-application**, not merely an authorized athlete, must qualify.
-
-1. Sign in with the Strava account that owns the application at
-   https://www.strava.com/settings/api.
-2. Confirm an eligible subscription and reactivate the existing app in the
-   API Settings dashboard. Check the app status, not just the access token.
-3. Re-run **Actions → Run Data Sync → Run workflow**. If the same application
-   was reactivated, the existing GitHub Actions secrets may remain valid.
-   If a new app is created, update `STRAVA_CLIENT_ID`,
-   `STRAVA_CLIENT_SECRET` and a freshly authorized
-   `STRAVA_CLIENT_REFRESH_TOKEN` in repository Actions secrets.
-
-If you do not want to reactivate the Strava app, choose another supported
-data source **only after checking data coverage**. The upstream
-`intervals_icu` integration uses `INTERVALS_ICU_ATHLETE_ID` and
-`INTERVALS_ICU_API_KEY`; it is not a drop-in replacement for historical
-Strava data. The `strava_web` route uses an authenticated web-session cookie,
-which has different security and stability risks; do not switch to it
-unattended.
-
-Do not disable workflow failures with `continue-on-error`: a successful
-sync run must mean that its selected data source actually succeeded.
-Scheduled runs failed while `RUN_TYPE: strava` remained selected. With COROS
-selected, this no longer blocks new activity imports.
-
-References:
-
-- https://developers.strava.com/docs/getting-started/
-- https://communityhub.strava.com/developers-api-7/code-inactive-on-all-new-requests-13620
-- https://github.com/yihong0618/running_page/discussions/1126
+Historically exposed raw GPS, old deployments and GitHub cached links are
+outside routine source cleanup. See [history remediation](history-remediation.md)
+before attempting any historical rewrite or purge.

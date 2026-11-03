@@ -76,10 +76,12 @@ jobs:
         run: |
           node scripts/check-public-repository.mjs
           node scripts/validate-public-data.mjs
+          node scripts/validate-public-data.mjs data/samples/activities.sample.json
           node --test scripts/release-safety.test.mjs
           node --test scripts/domain.test.mjs
           node --test scripts/route-geometry.test.mjs
           node --test scripts/resilience.test.mjs
+          node --test scripts/heatmap.test.mjs
           pnpm run check
           pnpm run lint
           pnpm run build

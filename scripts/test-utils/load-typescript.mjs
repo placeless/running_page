@@ -11,7 +11,10 @@ const root = path.resolve(
 const requireNode = createRequire(import.meta.url);
 
 /** Minimal in-memory adapter for testing pure TS modules on Node 20+. */
-export function createTypeScriptLoader(modules = {}) {
+export function createTypeScriptLoader(
+  modules = {},
+  viteEnv = { DEV: false, MODE: 'test', BASE_URL: '/' }
+) {
   const loaded = new Map();
   const load = (relative) => {
     const filename = path.resolve(
@@ -21,7 +24,13 @@ export function createTypeScriptLoader(modules = {}) {
         : relative + '.ts'
     );
     if (loaded.has(filename)) return loaded.get(filename).exports;
-    const code = ts.transpileModule(readFileSync(filename, 'utf8'), {
+    // TypeScript does not rewrite import.meta.env when emitting CommonJS.
+    // Substitute a controlled Vite environment for offline loader tests.
+    const source = readFileSync(filename, 'utf8').replaceAll(
+      'import.meta.env',
+      '__testViteEnv'
+    );
+    const code = ts.transpileModule(source, {
       fileName: filename,
       compilerOptions: {
         module: ts.ModuleKind.CommonJS,
@@ -37,10 +46,11 @@ export function createTypeScriptLoader(modules = {}) {
         ? load(path.resolve(path.dirname(filename), specifier))
         : requireNode(specifier);
     };
-    new Function('require', 'module', 'exports', code)(
+    new Function('require', 'module', 'exports', '__testViteEnv', code)(
       require,
       module,
-      module.exports
+      module.exports,
+      viteEnv
     );
     return module.exports;
   };

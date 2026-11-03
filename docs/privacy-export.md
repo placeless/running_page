@@ -11,6 +11,7 @@ conceal GPS coordinates present in a browser-downloaded JSON file.
 | ---------------------------------------------- | --------------------- | ----------------------------- |
 | COROS credentials, raw FIT, GPX, TCX           | Private archive       | **No**                        |
 | Original `run_page/data.db`                    | Private archive       | **No**                        |
+| `PNG_OUT/`, `Workouts/` and personal posters   | Private generated     | **No**                        |
 | `private/privacy.json` (home/work/other zones) | Private configuration | **No**                        |
 | Validated `src/static/activities.json`         | Public export         | Yes                           |
 | Code, non-sensitive map boundaries and tests   | Public repository     | Yes                           |
@@ -112,6 +113,9 @@ for the before/after counts, timezone handling, and privacy cutoff.
 ## Move the raw database to a durable private GitHub repository
 
 The public repository historically carried raw FIT and SQLite files.
+In Batch 4, two legacy PNG_OUT share images were also untracked from the
+current index, with local files retained. Their content was not audited as
+part of this source-only cleanup and previous Git history is not purged.
 The private archive and an independent verification clone were checked
 before an explicitly approved, `--force-with-lease`-guarded cleanup of the
 Fork's public `master` on 2026-11-03. Old SHA URLs may remain cached on

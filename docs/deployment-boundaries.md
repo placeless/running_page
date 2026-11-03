@@ -3,10 +3,10 @@
 This is a fork-specific operational note, not a generic deployment instruction
 for upstream `running_page` users.
 
-| Public entry | Application | Maintenance scope |
-| --- | --- | --- |
-| `https://m.placeless.net/` | `running_page` dashboard, `placeless/running_page` | This repository |
-| `https://placeless.net/running/` | `Running, over time` experiment | Separate application; outside this repository |
+| Public entry                     | Application                                        | Maintenance scope                             |
+| -------------------------------- | -------------------------------------------------- | --------------------------------------------- |
+| `https://m.placeless.net/`       | `running_page` dashboard, `placeless/running_page` | This repository                               |
+| `https://placeless.net/running/` | `Running, over time` experiment                    | Separate application; outside this repository |
 
 Both entry points returned HTTP 200 with distinct page titles on 2026-11-02.
 Account-level Cloudflare routing was verified on 2026-11-03. These URLs do
@@ -15,12 +15,12 @@ domain.
 
 ## Verified live routing (November 2026)
 
-| Entry or resource | Verified owner / origin | Evidence |
-| --- | --- | --- |
-| `m.placeless.net` | Vercel-hosted `running_page`, behind Cloudflare's HTTP proxy | Public response headers `x-vercel-id` and `x-vercel-cache`; GitHub deployment records created by `vercel[bot]` |
-| `placeless.net` | Cloudflare Pages project `placeless-github-io` | Pages project source `placeless/placeless.github.io`; custom domain `placeless.net` |
-| `placeless.net/running*` | Separate Cloudflare Worker route `placeless-running` | Zone Worker Routes API |
-| `placeless-running.pages.dev` | Separate Cloudflare Pages project `placeless-running` | Pages project source `placeless/running`, branch `main` |
+| Entry or resource             | Verified owner / origin                                      | Evidence                                                                                                       |
+| ----------------------------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| `m.placeless.net`             | Vercel-hosted `running_page`, behind Cloudflare's HTTP proxy | Public response headers `x-vercel-id` and `x-vercel-cache`; GitHub deployment records created by `vercel[bot]` |
+| `placeless.net`               | Cloudflare Pages project `placeless-github-io`               | Pages project source `placeless/placeless.github.io`; custom domain `placeless.net`                            |
+| `placeless.net/running*`      | Separate Cloudflare Worker route `placeless-running`         | Zone Worker Routes API                                                                                         |
+| `placeless-running.pages.dev` | Separate Cloudflare Pages project `placeless-running`        | Pages project source `placeless/running`, branch `main`                                                        |
 
 These are independent deployment boundaries. Cloudflare's DNS Records API
 returned HTTP 403 for the current Wrangler OAuth identity, so the precise
@@ -67,5 +67,5 @@ running_page origin.
    Changing a hostname or publishing a fresh build does not erase previous
    artifacts.
 
-Do not interpret the generic README's Cloudflare example, GitHub Pages
-workflow, or upstream documentation as the actual production routing contract.
+The fork no longer has a GitHub Pages or Docker publisher. Do not interpret
+upstream deployment examples as this fork's production routing contract.

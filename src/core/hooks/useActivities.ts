@@ -150,12 +150,19 @@ export function getAvailableYears(activities: Activity[]): number[] {
 // Async data loading (fetch-based, compatible with Suspense)
 import activitiesUrl from '@/static/activities.json?url';
 
+// Dev-only synthetic fixture. Production always uses the validated public
+// export, even if a build is invoked with --mode sample.
+const activitySourceUrl =
+  import.meta.env.DEV && import.meta.env.MODE === 'sample'
+    ? `${import.meta.env.BASE_URL}data/samples/activities.sample.json`
+    : activitiesUrl;
+
 let activityDataCache: Activity[] | null = null;
 let activityDataError: unknown = null;
 let activityDataPromise: Promise<Activity[]> | null = null;
 
 const loadActivityData = () => {
-  activityDataPromise ??= fetch(activitiesUrl)
+  activityDataPromise ??= fetch(activitySourceUrl)
     .then((response) => {
       if (!response.ok)
         throw new Error(`Failed to load activities: ${response.status}`);

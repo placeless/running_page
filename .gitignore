@@ -37,6 +37,9 @@ route.svg
 /TCX_OUT/
 /activities/
 /imported.json
+/PNG_OUT/
+/Workouts/
+/src/run_page
 
 # Generated activity graphics containing personal history and route shapes.
 /assets/grid.svg

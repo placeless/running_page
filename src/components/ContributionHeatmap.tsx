@@ -46,7 +46,6 @@ function getColor(distance: number, max: number, filter: SportFilter): string {
     Run: TYPE_PALETTES.Run,
     Ride: TYPE_PALETTES.Ride,
     Hike: TYPE_PALETTES.Hike,
-    Gym: ['#cffafe', '#67e8f9', '#0891b2', '#155e75'],
   };
   const palette = colors[filter] ?? colors.all;
   return palette[level - 1] ?? palette[0];
@@ -83,12 +82,7 @@ function dominantDisplayType(
   return toDisplayType(sorted[0].type);
 }
 
-function buildYearGrid(
-  yr: number,
-  acts: Activity[],
-  isGym: boolean,
-  isAll: boolean
-) {
+function buildYearGrid(yr: number, acts: Activity[], isAll: boolean) {
   const yearActivities = acts.filter(
     (a) => activityYear(a.start_date_local) === yr
   );
@@ -111,10 +105,7 @@ function buildYearGrid(
   const dayActivitiesMap = new Map<string, Activity[]>();
   for (const a of yearActivities) {
     const day = a.start_date_local.slice(0, 10);
-    dayMap.set(
-      day,
-      (dayMap.get(day) || 0) + (isGym ? 1 : a.distance > 0 ? a.distance : 1)
-    );
+    dayMap.set(day, (dayMap.get(day) || 0) + (a.distance > 0 ? a.distance : 1));
     dayTimeMap.set(
       day,
       (dayTimeMap.get(day) || 0) + parseMovingTime(a.moving_time)
@@ -232,23 +223,22 @@ export const ContributionHeatmap = memo(function ContributionHeatmap({
       );
   }
 
-  const isGym = false;
   const isAll = filter === 'all';
 
   const yearData = useMemo(() => {
     if (selectedYear === 'all') {
       return allYears.map((yr) => ({
         year: yr,
-        ...buildYearGrid(yr, activities, isGym, isAll),
+        ...buildYearGrid(yr, activities, isAll),
       }));
     }
     return [
       {
         year: selectedYear,
-        ...buildYearGrid(selectedYear, activities, isGym, isAll),
+        ...buildYearGrid(selectedYear, activities, isAll),
       },
     ];
-  }, [activities, selectedYear, allYears, isGym, isAll]);
+  }, [activities, selectedYear, allYears, isAll]);
 
   const dayLabels =
     locale === 'zh'
@@ -270,28 +260,6 @@ export const ContributionHeatmap = memo(function ContributionHeatmap({
     );
     return (['Run', 'Training'] as const).filter((t) => types.has(t));
   }, [activities, selectedYear, isAll]);
-
-  // Gym: monthly session breakdown
-  const gymMonthlyData = useMemo(() => {
-    if (!isGym || selectedYear === 'all') return [];
-    return Array.from({ length: 12 }, (_, m) => {
-      const monthActs = activities.filter((a) => {
-        return (
-          activityYear(a.start_date_local) === selectedYear &&
-          Number(a.start_date_local.slice(5, 7)) === m + 1
-        );
-      });
-      const byType = Object.fromEntries([] as [string, number][]);
-      return { month: m, total: monthActs.length, byType };
-    });
-  }, [activities, selectedYear, isGym]);
-
-  const gymTypeColors: Record<string, string> = {
-    WeightTraining: '#f97316',
-    Workout: '#0e7490',
-    StairStepper: '#3b82f6',
-    WaterSport: '#06b6d4',
-  };
 
   const heatmapTitle =
     filter === 'Run'
@@ -532,7 +500,7 @@ export const ContributionHeatmap = memo(function ContributionHeatmap({
                 </span>
                 <span className="text-xs text-[var(--color-muted)]">
                   {stats.count} {locale === 'zh' ? '次' : 'sessions'}
-                  {!isGym && ` · ${formatDistance(stats.distance)} km`}
+                  {` · ${formatDistance(stats.distance)} km`}
                 </span>
               </div>
             )}
@@ -598,11 +566,9 @@ export const ContributionHeatmap = memo(function ContributionHeatmap({
                     const titleText =
                       day.activities.length === 0
                         ? day.date
-                        : isGym
-                          ? `${day.date}: ${day.distance} session(s)`
-                          : day.domType === 'Training'
-                            ? `${day.date}: ${Math.round(day.timeSecs / 60)}min`
-                            : `${day.date}: ${(day.activities.reduce((s, a) => s + a.distance, 0) / 1000).toFixed(1)} km`;
+                        : day.domType === 'Training'
+                          ? `${day.date}: ${Math.round(day.timeSecs / 60)}min`
+                          : `${day.date}: ${(day.activities.reduce((s, a) => s + a.distance, 0) / 1000).toFixed(1)} km`;
                     return (
                       <button
                         type="button"
@@ -760,24 +726,22 @@ export const ContributionHeatmap = memo(function ContributionHeatmap({
                 </svg>
                 {(allStats.time / 3600).toFixed(0)}h
               </span>
-              {!isGym && (
-                <span className="flex items-center gap-1 font-mono">
-                  <svg
-                    className="h-3.5 w-3.5"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
-                    />
-                  </svg>
-                  {formatDistance(allStats.distance)} km
-                </span>
-              )}
+              <span className="flex items-center gap-1 font-mono">
+                <svg
+                  className="h-3.5 w-3.5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
+                  />
+                </svg>
+                {formatDistance(allStats.distance)} km
+              </span>
             </div>
           )
         : yearData[0] && (
@@ -814,24 +778,23 @@ export const ContributionHeatmap = memo(function ContributionHeatmap({
                 </svg>
                 {(yearData[0].stats.time / 3600).toFixed(0)}h
               </span>
-              {!isGym && (
-                <span className="flex items-center gap-1 font-mono">
-                  <svg
-                    className="h-3.5 w-3.5"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
-                    />
-                  </svg>
-                  {formatDistance(yearData[0].stats.distance)} km
-                </span>
-              )}
+              <span className="flex items-center gap-1 font-mono">
+                <svg
+                  className="h-3.5 w-3.5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
+                  />
+                </svg>
+                {formatDistance(yearData[0].stats.distance)} km
+              </span>
+
               {filter === 'Run' && yearData[0].stats.pace > 0 && (
                 <span className="flex items-center gap-1 font-mono">
                   <svg
@@ -852,103 +815,6 @@ export const ContributionHeatmap = memo(function ContributionHeatmap({
               )}
             </div>
           )}
-
-      {/* Gym: monthly frequency bars */}
-      {isGym && gymMonthlyData.length > 0 && (
-        <div className="mt-4 border-t border-[var(--color-border)] pt-4">
-          <p className="mb-3 text-xs text-[var(--color-muted)]">
-            {locale === 'zh' ? '月度频次' : 'Monthly Frequency'}
-          </p>
-          <div className="flex items-end gap-1.5" style={{ height: '64px' }}>
-            {gymMonthlyData.map((m) => {
-              const maxMonthTotal = Math.max(
-                ...gymMonthlyData.map((x) => x.total),
-                1
-              );
-              const barH =
-                m.total > 0
-                  ? Math.max(Math.round((m.total / maxMonthTotal) * 52), 6)
-                  : 0;
-              return (
-                <div
-                  key={m.month}
-                  className="group flex flex-1 flex-col items-center gap-1"
-                >
-                  <div
-                    className="flex w-full items-end justify-center"
-                    style={{ height: '52px' }}
-                  >
-                    {m.total > 0 && (
-                      <div
-                        className="relative w-full overflow-hidden rounded-t-sm"
-                        style={{ height: `${barH}px` }}
-                      >
-                        {([] as string[])
-                          .filter(
-                            (t) => (m.byType as Record<string, number>)[t] > 0
-                          )
-                          .map((t) => {
-                            const segPct =
-                              ((m.byType as Record<string, number>)[t] /
-                                m.total) *
-                              100;
-                            return (
-                              <div
-                                key={t}
-                                className="w-full"
-                                style={{
-                                  height: `${segPct}%`,
-                                  backgroundColor: gymTypeColors[t],
-                                }}
-                              />
-                            );
-                          })}
-                        <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[8px] whitespace-nowrap text-[var(--color-accent)] opacity-0 transition-opacity group-hover:opacity-100">
-                          {m.total}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  <span className="text-[9px] text-[var(--color-muted)]">
-                    {
-                      [
-                        'J',
-                        'F',
-                        'M',
-                        'A',
-                        'M',
-                        'J',
-                        'J',
-                        'A',
-                        'S',
-                        'O',
-                        'N',
-                        'D',
-                      ][m.month]
-                    }
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-          <div className="mt-2 flex flex-wrap items-center gap-4">
-            {([] as string[])
-              .filter((t) => activities.some((a) => a.type === t))
-              .map((t) => (
-                <span
-                  key={t}
-                  className="flex items-center gap-1 text-[10px] text-[var(--color-muted)]"
-                >
-                  <span
-                    className="inline-block h-2.5 w-2.5 rounded-sm"
-                    style={{ backgroundColor: gymTypeColors[t] }}
-                  />
-                  {typeLabel(t, locale)}
-                </span>
-              ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 });

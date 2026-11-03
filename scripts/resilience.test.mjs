@@ -7,6 +7,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import polyline from '@mapbox/polyline';
 import { createTypeScriptLoader } from './test-utils/load-typescript.mjs';
+import { validatePublicData } from './validate-public-data.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const readSource = (relative) =>
@@ -70,6 +71,47 @@ test('classic uses the same resettable loader rather than a second fetch cache',
   assert.doesNotMatch(classic, /fetch\(|activityDataPromise|activityDataError/);
   const boundary = readSource('src/components/ErrorBoundary.tsx');
   assert.match(boundary, /resetActivityData/);
+});
+
+test('sample data is privacy-valid and enabled only for development mode', async () => {
+  const fixture = path.join(root, 'data/samples/activities.sample.json');
+  assert.equal(validatePublicData(fixture), 12);
+  const modules = {
+    '@/static/activities.json?url': '/actual-public.json',
+  };
+  const cases = [
+    [
+      { DEV: true, MODE: 'sample', BASE_URL: '/' },
+      '/data/samples/activities.sample.json',
+    ],
+    [{ DEV: true, MODE: 'development', BASE_URL: '/' }, '/actual-public.json'],
+    [{ DEV: false, MODE: 'sample', BASE_URL: '/' }, '/actual-public.json'],
+  ];
+  const originalFetch = globalThis.fetch;
+  try {
+    for (const [env, expectedUrl] of cases) {
+      const source = createTypeScriptLoader(
+        modules,
+        env
+      )('src/core/hooks/useActivities');
+      let called;
+      globalThis.fetch = async (url) => {
+        called = url;
+        return { ok: true, json: async () => [] };
+      };
+      let thrown;
+      try {
+        source.getActivityData();
+      } catch (value) {
+        thrown = value;
+      }
+      await thrown;
+      assert.equal(called, expectedUrl);
+      source.resetActivityData();
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test('map fallback preserves accessibility without WebGL', () => {

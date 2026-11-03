@@ -2,8 +2,8 @@
 
 Audit baseline: local `master` at `5b396187` (2026-11-03). This review concerns
 `placeless/running_page`, deployed at `m.placeless.net`, **not** the independent
-application at `placeless.net/running/`. It is a plan, not a claim that the
-changes below have been implemented.
+application at `placeless.net/running/`. This file preserves the **historical audit baseline**; the implementation
+status of each batch is recorded below, separately from original findings.
 
 ### Batch 0 implementation status
 
@@ -126,6 +126,44 @@ Limitations: local HTTP did not use CDN compression or network throttling.
 Observed FCP/LCP changes were negligible. INP, CLS, device memory and
 repeat-run performance distributions remain unverified.
 
+### Batch 4 implementation status
+
+Implemented locally on `review/batch-4-oss-cleanup`, based on Batch 3:
+
+- Confirmed both Classic city and site-metadata copies were byte-identical
+  to their shared `src/static/` versions; removed the duplicates, redirected
+  the two actual imports and removed four unused compatibility reexports.
+- Removed the unreachable `isGym=false` code and synthetic monthly gym UI,
+  retaining activity/day/week and all-sport heatmap behavior. Added an SSR
+  behavior regression for mixed running and zero-distance strength workouts.
+- Replaced the old conditional multi-provider Actions workflow with a
+  **COROS-only 159-line pipeline**, preserving its private archive restore,
+  policy, signed-FIT downloader, reconciliation, backup-first ordering,
+  master-only restriction, JSON allowlist commit and serialization.
+- Removed the unused GitHub Pages publisher and an obsolete Docker image
+  builder using Node 18, build-argument credentials and raw GPS posters.
+  Historical provider Python scripts remain for manual/upstream use, but
+  their runtime steps are no longer exposed by the sync workflow.
+- Untracked (without deleting local files) two historical `PNG_OUT` share
+  images; added `PNG_OUT/`, `Workouts/` and the obsolete `src/run_page`
+  symlink to the public index denylist. No private image contents were
+  examined and no Git history was rewritten.
+- Removed the duplicate PDM lockfile (the active `uv.lock` remains), stale
+  Garmin-specific config example, and two standalone TUI prototypes that
+  were incorrectly collected by pytest; kept supported Python/TUI modules.
+- Rewrote README (English/Chinese), CONTRIBUTING, and fork maintenance;
+  added concise AGENTS.md and a **dev-only** 12-activity synthetic sample
+  fixture. `pnpm dev:sample` exercises the frontend without account or
+  database access; production always validates and builds the real public
+  export, even under `--mode sample`.
+- Aligned package metadata and Makefile checks with current workflows;
+  added offline sample-mode, privacy-guard and heatmap regression tests.
+
+Remaining: review complete GitHub Actions execution after a merge to `master`,
+verify fresh-clone installation and both themes in a live browser, review
+old public PNG history/cache separately, and audit remaining upstream Python
+adapters/legacy frontend compatibility paths before any larger deletion.
+
 ## Ground rules
 
 - Preserve the upstream merge path; never push to `yihong0618/running_page`.
@@ -153,9 +191,9 @@ repeat-run performance distributions remain unverified.
 
 ## Findings register
 
-Priority means risk/impact, not implementation complexity. `confirmed` is
-supported by code inspection or a synthetic reproduction; `verify` requires
-runtime, policy or external validation.
+The table below is a **historical baseline**, not a current backlog/status
+report. The corresponding batch implementation statuses above record resolved
+items. Priority reflects risk, not implementation complexity.
 
 | Priority | Status                                  | Finding and code ownership                                                                                                                                                                                      | Proposed correction                                                                                                                  |
 | -------- | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |

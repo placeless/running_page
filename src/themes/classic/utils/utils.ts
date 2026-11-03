@@ -1,4 +1,4 @@
-import { chinaCities } from '../static/city';
+import { chinaCities } from '@/static/city';
 import {
   MUNICIPALITY_CITIES_ARR,
   RUN_TITLES,

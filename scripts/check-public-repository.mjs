@@ -7,8 +7,9 @@ import process from 'node:process';
 
 export const privatePaths = [
   /^run_page\/data\.db$/,
-  /^(?:FIT_OUT|GPX_OUT|TCX_OUT|activities|private|\.private-running-data)\//,
+  /^(?:FIT_OUT|GPX_OUT|TCX_OUT|activities|PNG_OUT|Workouts|private|\.private-running-data)\//,
   /^imported\.json$/,
+  /^src\/run_page$/,
   /^assets\/(?:grid|github[^/]*|mol[^/]*|year[^/]*)\.svg$/,
   /\.(?:fit|gpx|tcx|sqlite|sqlite3|db)$/i,
 ];
