@@ -80,3 +80,31 @@ previously downloaded FIT files, and no additional downloads. The privacy
 cutoff advanced by one date and published the October 30 run; public JSON
 grew from **934 to 935** without exposing GPS geometry. This verifies the
 current export, but not provider completeness before the COROS cutoff.
+
+## Missing COROS strength sessions: root cause and repair
+
+The earlier SQLite reconciliation was incomplete: it proved every _existing
+database_ entry was accounted for but did not reconcile all FIT files.
+Independent inspection of all 96 COROS FIT files found **76 running** and
+**20 strength-training** sessions. All 20 training FIT sessions had valid
+timing information and no `total_distance` field. The legacy FIT parser
+rejected missing distances, and the track loader also filtered zero-length
+tracks. Consequently none of the 20 was in SQLite, despite successful
+downloads and sync logs reporting no new files.
+
+The import pipeline now explicitly accepts timed, zero-distance FIT Training
+sessions, maps COROS `strength_training` to `WeightTraining`, preserves
+their duration/heart rate, and keeps zero-distance running records excluded.
+It compares GPS-less session dates against COROS's authoritative local
+calendar day when available. For timestamps without GPS, the optional
+`RUNNING_FIT_TIMEZONE` config controls the clock fallback; absent explicit
+configuration, UTC is used rather than silently assuming Asia/Shanghai.
+The owner-specific workflow sets `Europe/Madrid`. This is a _fallback_,
+not a claim to know the timezone of workouts recorded while travelling.
+
+Isolated replay against a **copy** of the 937-record private database
+restored all 20 sessions, yielding **957 private records** and **955
+privacy-safe public records** at the audited cutoff. Repeat import was
+idempotent, and all public route fields remained empty. The original private
+archive was not modified by the local replay. A production COROS sync must
+confirm these counts before treating the repair as deployed.

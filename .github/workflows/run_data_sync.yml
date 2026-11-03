@@ -33,6 +33,7 @@ env:
   # please change to your own config.
   RUN_TYPE: coros # COROS Training Hub; no Strava API subscription needed.
   COROS_SYNC_SINCE: '2026-06-30' # Preserve the Strava archive through 2026-06-29 without cross-provider duplicates.
+  RUNNING_FIT_TIMEZONE: Europe/Madrid # Explicit clock fallback for COROS workouts without GPS; API local date takes priority.
   ATHLETE: placeless
   TITLE: Placeless Running
   MIN_GRID_DISTANCE: 10 # change min distance here

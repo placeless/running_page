@@ -255,7 +255,18 @@ async def download_and_generate(account, password, only_run, file_type, since=No
         )
     if to_generate_coros_ids and skipped == len(to_generate_coros_ids):
         raise RuntimeError("COROS returned no usable exports for new activities")
-    make_activities_file(SQL_FILE, folder, JSON_FILE, file_type)
+    local_dates = (
+        {
+            str(activity["labelId"]): activity_date(activity)
+            for activity in activity_infos
+            if activity.get("date") is not None
+        }
+        if file_type == "fit"
+        else None
+    )
+    make_activities_file(
+        SQL_FILE, folder, JSON_FILE, file_type, activity_local_dates=local_dates
+    )
 
 
 async def gather_with_concurrency(n, tasks):

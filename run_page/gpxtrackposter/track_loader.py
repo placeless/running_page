@@ -9,6 +9,7 @@
 import logging
 import os
 import sys
+from datetime import timedelta
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 import concurrent.futures
@@ -92,7 +93,20 @@ class TrackLoader:
 
         tracks = self._filter_tracks(tracks)
         # filter out tracks with length < min_length
-        return [t for t in tracks if t.length >= self.min_length]
+        return [
+            t
+            for t in tracks
+            if t.length >= self.min_length
+            or (file_suffix == "fit" and self._is_distance_free_training(t))
+        ]
+
+    @staticmethod
+    def _is_distance_free_training(track):
+        return (
+            track.type in ("Workout", "WeightTraining")
+            and track.length == 0
+            and track.moving_dict.get("moving_time", timedelta(0)) > timedelta(0)
+        )
 
     def load_tracks_from_db(self, sql_file, is_grid=False):
         session = init_db(sql_file)
@@ -118,7 +132,7 @@ class TrackLoader:
         filtered_tracks = []
         for t in tracks:
             file_name = t.file_names[0]
-            if int(t.length) == 0:
+            if int(t.length) == 0 and not self._is_distance_free_training(t):
                 log.info(f"{file_name}: skipping empty track")
             elif not t.start_time_local:
                 log.info(f"{file_name}: skipping track without start time")

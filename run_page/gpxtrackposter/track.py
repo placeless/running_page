@@ -8,6 +8,7 @@
 import datetime
 import os
 from collections import namedtuple
+from zoneinfo import ZoneInfo
 
 import gpxpy as mod_gpxpy
 import lxml
@@ -108,9 +109,10 @@ class Track:
                 )
                 os.remove(file_name)
                 return
-            if (
-                messages.get("session_mesgs") is None
-                or messages.get("session_mesgs")[0].get("total_distance") is None
+            sessions = messages.get("session_mesgs") or []
+            if not sessions or (
+                sessions[0].get("total_distance") is None
+                and str(sessions[0].get("sport", "")).lower() != "training"
             ):
                 print(
                     f"Session message or total distance is missing when loading FIT. for file {self.file_names[0]}, we just ignore this file and continue"
@@ -374,17 +376,26 @@ class Track:
             (message["start_time"] + FIT_EPOCH_S + message["total_elapsed_time"]),
             tz=datetime.UTC,
         )
-        self.length = message["total_distance"]
+        # COROS strength workouts legitimately have no total_distance field.
+        # They still carry duration, effort and heart-rate measurements.
+        self.length = message.get("total_distance") or 0
         self.average_heartrate = message.get("avg_heart_rate", None)
-        if message["sport"].lower() == "running":
+        sport = str(message["sport"]).lower()
+        if sport == "running":
             self.type = "Run"
+        elif sport == "training":
+            self.type = (
+                "WeightTraining"
+                if message.get("sub_sport") == "strength_training"
+                else "Workout"
+            )
         else:
-            self.type = message["sport"].lower()
+            self.type = sport
         self.subtype = message.get("sub_sport", None)
 
         self.elevation_gain = message.get("total_ascent", None)
         # moving_dict
-        self.moving_dict["distance"] = message["total_distance"]
+        self.moving_dict["distance"] = self.length
         self.moving_dict["moving_time"] = datetime.timedelta(
             seconds=(
                 message["total_moving_time"]
@@ -398,7 +409,7 @@ class Track:
         self.moving_dict["average_speed"] = message.get(
             "enhanced_avg_speed"
         ) or message.get("avg_speed", 0)
-        for record in fit["record_mesgs"]:
+        for record in fit.get("record_mesgs", []):
             if "position_lat" in record and "position_long" in record:
                 lat = record["position_lat"] / SEMICIRCLE
                 lng = record["position_long"] / SEMICIRCLE
@@ -412,9 +423,16 @@ class Track:
             self.polylines.append(_polylines)
             self.polyline_str = polyline.encode(self.polyline_container)
         else:
-            self.start_time_local, self.end_time_local = parse_datetime_to_local(
-                self.start_time, self.end_time, None
+            # With no GPS there is no location from which to infer a time
+            # zone. Never assign the legacy Asia/Shanghai default silently.
+            # COROS additionally supplies its authoritative calendar date.
+            timezone = (
+                ZoneInfo(os.environ["RUNNING_FIT_TIMEZONE"])
+                if os.getenv("RUNNING_FIT_TIMEZONE")
+                else datetime.UTC
             )
+            self.start_time_local = self.start_time.astimezone(timezone)
+            self.end_time_local = self.end_time.astimezone(timezone)
 
         # The FIT file created by Garmin
         if "file_id_mesgs" in fit:

@@ -89,9 +89,9 @@ def test_coros_cutover_keeps_existing_archive_and_skips_old_downloads(
 
         async def fetch_activity_ids_types(self, only_run):
             return [
-                {"labelId": "old", "sportType": 100, "startTime": "2026-06-29"},
-                {"labelId": "new-cached", "sportType": 100, "startTime": "2026-07-01"},
-                {"labelId": "new", "sportType": 100, "startTime": "2026-07-02"},
+                {"labelId": "old", "sportType": 100, "date": 20260629},
+                {"labelId": "new-cached", "sportType": 100, "date": 20260701},
+                {"labelId": "new", "sportType": 100, "date": 20260702},
             ]
 
         async def download_activity(self, label_id, sport_type, file_type):
@@ -107,7 +107,7 @@ def test_coros_cutover_keeps_existing_archive_and_skips_old_downloads(
     monkeypatch.setattr(
         coros_sync,
         "make_activities_file",
-        lambda *args: generated.append(args),
+        lambda *args, **kwargs: generated.append((args, kwargs)),
     )
     asyncio.run(
         coros_sync.download_and_generate(
@@ -116,6 +116,10 @@ def test_coros_cutover_keeps_existing_archive_and_skips_old_downloads(
     )
     assert events == [("new", 100, "fit")]
     assert len(generated) == 1
+    assert generated[0][1]["activity_local_dates"] == {
+        "new-cached": date(2026, 7, 1),
+        "new": date(2026, 7, 2),
+    }
 
 
 def test_coros_api_error_does_not_pass_as_empty_sync():

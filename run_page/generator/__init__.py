@@ -82,7 +82,13 @@ class Generator:
             sys.stdout.flush()
         self.session.commit()
 
-    def sync_from_data_dir(self, data_dir, file_suffix="gpx", activity_title_dict=None):
+    def sync_from_data_dir(
+        self,
+        data_dir,
+        file_suffix="gpx",
+        activity_title_dict=None,
+        activity_local_dates=None,
+    ):
         loader = track_loader.TrackLoader()
         tracks = loader.load_tracks(
             data_dir, file_suffix=file_suffix, activity_title_dict=activity_title_dict
@@ -95,6 +101,21 @@ class Generator:
         synced_files = []
 
         for t in tracks:
+            # A COROS activity-query date is authoritative for GPS-less
+            # workouts. A configured timezone is only a clock fallback.
+            if (
+                file_suffix == "fit"
+                and activity_local_dates is not None
+                and t.type in ("Workout", "WeightTraining")
+                and not t.polyline_container
+            ):
+                local_date = activity_local_dates.get(
+                    os.path.splitext(t.file_names[0])[0]
+                )
+                if local_date is not None:
+                    offset = local_date - t.start_time_local.date()
+                    t.start_time_local += datetime.timedelta(days=offset.days)
+                    t.end_time_local += datetime.timedelta(days=offset.days)
             created = update_or_create_activity(
                 self.session, t.to_namedtuple(run_from=file_suffix)
             )
