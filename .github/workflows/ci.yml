@@ -83,5 +83,6 @@ jobs:
           pnpm run check
           pnpm run lint
           pnpm run build
+          node scripts/performance/check-bundles.mjs
         env:
           VITE_MAPBOX_TOKEN: ${{ secrets.MAPBOX_TOKEN }}

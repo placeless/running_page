@@ -97,7 +97,34 @@ A forced WebGL-off screenshot was likewise captured while still loading.
 These are partial visual smoke checks, not proof of route/renderer recovery,
 finished map quality, keyboard navigation, or assistive technology behavior.
 The synthetic fixture and its temporary local servers were removed after QA.
-Real WebGL failure interaction and live provider error behavior remain untested.
+At the end of Batch 2, WebGL failure interaction and live provider error
+behavior remained untested. Batch 3 subsequently covered simulated WebGL
+failure and invalid-token fallback in Firefox, not production credentials.
+
+### Batch 3 implementation status
+
+Implemented locally on `review/batch-3-performance`, based on Batch 2.
+See [performance.md](performance.md) for measurement protocol, raw numbers,
+ablation decisions and validation limits.
+
+- Firefox 159 WebDriver BiDi benchmark using fresh isolated profiles,
+  production Vite output, desktop/mobile viewports and a completely
+  invented 500-route fixture. No private FIT, SQLite or provider IDs used.
+- Changed the two eager WebGL imports to on-demand provider imports, while
+  removing runtime Mapbox coupling from coordinate-bound calculations.
+  Synthetic-route cold Home transferred **57.1% less JavaScript** without
+  losing the map; invalid-token and WebGL-disabled fallbacks were exercised.
+- Deferred the world boundary GeoJSON until the `FootprintMap` approaches
+  the viewport. Mobile first-visit local transfer fell **31.2%**; scrolling
+  still loaded and rendered 239 SVG paths. Visible desktop behavior stayed
+  eager.
+- Added a non-browser Vite-manifest guard to CI to ensure both map engines
+  remain excluded from initial static imports. Other large chunks were
+  investigated but not changed without runtime evidence.
+
+Limitations: local HTTP did not use CDN compression or network throttling.
+Observed FCP/LCP changes were negligible. INP, CLS, device memory and
+repeat-run performance distributions remain unverified.
 
 ## Ground rules
 
@@ -241,9 +268,11 @@ smaller, module boundaries clearer, and docs match behavior.
   header forwarding by the reusable HTTP client.
 - The complete provider-side activity inventory and historical pre-cutover
   deduplication have **not** been independently reconciled.
-- Browser performance metrics, live visual quality and screen-reader behavior
-  have **not** been measured in this source-only review.
+- Local Firefox FCP/LCP and transfer metrics, route-enabled rendering, and
+  simulated WebGL failure have been measured in Batch 3. Trusted INP, CLS,
+  throttled-network performance, full screen-reader behavior and live visual
+  quality across browser engines remain unmeasured.
 - The independent `placeless.net/running/` app and historic GitHub caches are
   separate audit surfaces. This plan does not claim to cleanse them.
 - The present route-less public export cannot exercise route visualizations:
-  use synthetic privacy-safe fixture routes for tests and screenshots.
+  Batch 3 used a separate 500-route synthetic fixture, not original GPS.

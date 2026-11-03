@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { Activity } from '../types';
 import { useLocale } from '../hooks/useLocale';
 import { ChinaMap } from './ChinaMap';
@@ -74,10 +74,45 @@ export const FootprintMap = memo(function FootprintMap({
 }: Props) {
   const { locale } = useLocale();
   const zh = locale === 'zh';
+  const panelRef = useRef<HTMLElement>(null);
+  const [nearViewport, setNearViewport] = useState(false);
   const [features, setFeatures] = useState<CountryFeature[]>([]);
   const [worldError, setWorldError] = useState(false);
 
   useEffect(() => {
+    const element = panelRef.current;
+    if (!element) return;
+    let active = true;
+    let observer: IntersectionObserver | null = null;
+    try {
+      if (typeof IntersectionObserver === 'undefined')
+        throw new Error('IntersectionObserver unavailable');
+      observer = new IntersectionObserver(
+        ([entry]) => {
+          if (entry.isIntersecting) {
+            setNearViewport(true);
+            observer?.disconnect();
+          }
+        },
+        { rootMargin: '300px' }
+      );
+      observer.observe(element);
+    } catch {
+      queueMicrotask(() => {
+        if (active) setNearViewport(true);
+      });
+    }
+    return () => {
+      active = false;
+      observer?.disconnect();
+    };
+  }, []);
+
+  const needsWorld = nearViewport && selectedCountry !== 'CN';
+  useEffect(() => {
+    // Do not fetch and parse the worldwide GeoJSON on a mobile first screen
+    // where the map is multiple viewports below the fold.
+    if (!needsWorld || features.length || worldError) return;
     const controller = new AbortController();
     fetch(worldUrl, { signal: controller.signal })
       .then((response) => {
@@ -94,7 +129,7 @@ export const FootprintMap = memo(function FootprintMap({
     return () => {
       controller.abort();
     };
-  }, []);
+  }, [needsWorld, features.length, worldError]);
 
   const countries = useMemo(() => {
     const counts = new Map<string, number>();
@@ -141,6 +176,7 @@ export const FootprintMap = memo(function FootprintMap({
 
   return (
     <section
+      ref={panelRef}
       aria-label={zh ? '足迹地图' : 'Footprint map'}
       className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-5"
     >
