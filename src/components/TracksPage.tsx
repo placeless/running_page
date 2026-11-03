@@ -10,6 +10,8 @@ import {
   formatPace,
 } from '../hooks/useActivities';
 import { useLocale } from '../hooks/useLocale';
+import { activityYear } from '../core/domain/calendar';
+import { runningMovement } from '../core/domain/metrics';
 
 type SportType = 'Run';
 const trackPlaceholders = Array.from({ length: 40 }, (_, id) => ({
@@ -148,7 +150,7 @@ export function TracksPage({
       activities.filter((a) => {
         if (
           selectedYear !== null &&
-          new Date(a.start_date_local).getFullYear() !== selectedYear
+          activityYear(a.start_date_local) !== selectedYear
         )
           return false;
         if (sportFilter !== null && a.type !== sportFilter) return false;
@@ -165,18 +167,16 @@ export function TracksPage({
 
   const { totalDist, totalTime, avgPace } = useMemo(() => {
     let totalDist = 0,
-      totalTime = 0,
-      speed = 0,
-      runs = 0;
+      totalTime = 0;
     for (const activity of base) {
       totalDist += activity.distance;
       totalTime += parseMovingTime(activity.moving_time);
-      if (activity.type === 'Run' && activity.average_speed > 0) {
-        speed += activity.average_speed;
-        runs++;
-      }
     }
-    return { totalDist, totalTime, avgPace: runs ? speed / runs : 0 };
+    return {
+      totalDist,
+      totalTime,
+      avgPace: runningMovement(base).speed,
+    };
   }, [base]);
 
   // Cluster tracks — defer heavy work
@@ -228,8 +228,9 @@ export function TracksPage({
       [...clusteredTracks].sort((a, b) =>
         sortBy === 'distance'
           ? b.representative.distance - a.representative.distance
-          : new Date(b.representative.start_date_local).getTime() -
-            new Date(a.representative.start_date_local).getTime()
+          : b.representative.start_date_local.localeCompare(
+              a.representative.start_date_local
+            )
       ),
     [clusteredTracks, sortBy]
   );
@@ -334,7 +335,7 @@ export function TracksPage({
               {avgPace > 0 && (
                 <div>
                   <p className="text-[10px] tracking-wider text-[var(--color-muted)] uppercase">
-                    {locale === 'zh' ? '均配速' : 'Avg Pace'}
+                    {locale === 'zh' ? '跑步均配速' : 'Run Pace'}
                   </p>
                   <p className="font-mono text-lg font-bold">
                     {formatPace(avgPace)}
@@ -380,10 +381,13 @@ export function TracksPage({
                 {selectedActivity.name}
               </p>
               <p className="mb-2 text-[10px] text-[var(--color-muted)]">
-                {new Date(selectedActivity.start_date_local).toLocaleDateString(
-                  locale === 'zh' ? 'zh-CN' : 'en-US',
-                  { year: 'numeric', month: 'short', day: 'numeric' }
-                )}{' '}
+                {new Date(
+                  selectedActivity.start_date_local.slice(0, 10) + 'T12:00:00'
+                ).toLocaleDateString(locale === 'zh' ? 'zh-CN' : 'en-US', {
+                  year: 'numeric',
+                  month: 'short',
+                  day: 'numeric',
+                })}{' '}
                 {selectedActivity.start_date_local.length > 10 &&
                   new Date(
                     selectedActivity.start_date_local

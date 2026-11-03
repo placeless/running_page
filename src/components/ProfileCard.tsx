@@ -7,6 +7,7 @@ import {
   extractProvince,
 } from '../hooks/useActivities';
 import { AVATAR } from '../config';
+import { activityYear } from '../core/domain/calendar';
 
 interface ProfileCardProps {
   activities: Activity[];
@@ -30,9 +31,7 @@ export const ProfileCard = memo(function ProfileCard({
     0
   );
 
-  const allDates = activities.map((a) =>
-    new Date(a.start_date_local).getFullYear()
-  );
+  const allDates = activities.map((a) => activityYear(a.start_date_local));
   const yearsActive =
     allDates.length > 0 ? Math.max(...allDates) - Math.min(...allDates) + 1 : 0;
 
@@ -49,15 +48,13 @@ export const ProfileCard = memo(function ProfileCard({
 
   const latest =
     activities.length > 0
-      ? [...activities].sort(
-          (a, b) =>
-            new Date(b.start_date_local).getTime() -
-            new Date(a.start_date_local).getTime()
+      ? [...activities].sort((a, b) =>
+          b.start_date_local.localeCompare(a.start_date_local)
         )[0]
       : null;
 
   const formatDate = (dateStr: string) => {
-    const d = new Date(dateStr);
+    const d = new Date(`${dateStr.slice(0, 10)}T12:00:00`);
     if (locale === 'zh') {
       return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
     }
@@ -210,8 +207,14 @@ export const ProfileCard = memo(function ProfileCard({
             {locale === 'zh' ? '最近活动' : 'Latest Activity'}
           </p>
           <p className="text-sm font-medium">
-            {latest.type === 'Run' ? '🏃 ' : '🚴 '}
-            {latest.name || (latest.type === 'Run' ? 'Run' : 'Ride')}
+            {latest.type === 'Run'
+              ? '🏃 '
+              : latest.type === 'Ride'
+                ? '🚴 '
+                : latest.type === 'WeightTraining' || latest.type === 'Workout'
+                  ? '🏋️ '
+                  : '◦ '}
+            {latest.name || latest.type}
             <span className="font-normal text-[var(--color-muted)]">
               {' '}
               · {formatDistance(latest.distance)} km ·{' '}

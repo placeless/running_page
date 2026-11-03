@@ -41,16 +41,16 @@ function SummaryCard({
 }) {
   const stats = summarize(activities);
   const chart = summaryChart(activities, period, label);
+  const chartUnit = period === 'day' ? 'min' : 'km';
   const metrics = [
     [zh ? '活动次数' : 'Activities', String(stats.count)],
     [
       zh ? '运动时间' : 'Moving time',
       `${Math.floor(stats.seconds / 3600)}h ${Math.floor((stats.seconds % 3600) / 60)}m`,
     ],
-    [
-      zh ? '平均配速' : 'Average pace',
-      stats.speed > 0 ? `${formatPace(stats.speed)} /km` : '—',
-    ],
+    ...(stats.speed > 0
+      ? [[zh ? '平均配速' : 'Average pace', `${formatPace(stats.speed)} /km`]]
+      : []),
     [
       zh ? '平均心率' : 'Average heart rate',
       stats.heartRate ? `${Math.round(stats.heartRate)} bpm` : '—',
@@ -59,17 +59,21 @@ function SummaryCard({
       zh ? '最远距离' : 'Longest activity',
       `${number(stats.maxDistance / 1000)} km`,
     ],
-    [
-      zh ? '最快配速' : 'Fastest pace',
-      stats.maxSpeed > 0 ? `${formatPace(stats.maxSpeed)} /km` : '—',
-    ],
+    ...(stats.maxSpeed > 0
+      ? [
+          [
+            zh ? '最快配速' : 'Fastest pace',
+            `${formatPace(stats.maxSpeed)} /km`,
+          ],
+        ]
+      : []),
     [
       zh ? '平均距离' : 'Average distance',
       `${number(stats.distance / stats.count / 1000)} km`,
     ],
     [zh ? '累计爬升' : 'Elevation gain', `${number(stats.elevation)} m`],
   ];
-  const chartUnit =
+  const chartUnitLabel =
     period === 'life'
       ? zh
         ? '年'
@@ -84,8 +88,8 @@ function SummaryCard({
             : 'Mon–Sun'
           : period === 'day'
             ? zh
-              ? '开始时间'
-              : 'Start time'
+              ? '运动类型'
+              : 'Sport'
             : zh
               ? '日'
               : 'Day';
@@ -116,7 +120,7 @@ function SummaryCard({
       </dl>
       <div
         role="img"
-        aria-label={`${label}: ${chart.map((d) => `${d.label}: ${d.km} km`).join(', ')}`}
+        aria-label={`${label}: ${chart.map((d) => `${d.label}: ${d.value} ${chartUnit}`).join(', ')}`}
       >
         <div className="h-40 w-full min-w-0">
           <ResponsiveContainer width="100%" height="100%">
@@ -151,8 +155,8 @@ function SummaryCard({
                 }}
               />
               <Bar
-                dataKey="km"
-                name="km"
+                dataKey="value"
+                name={chartUnit}
                 fill="var(--color-accent)"
                 radius={[3, 3, 0, 0]}
                 maxBarSize={32}
@@ -162,7 +166,7 @@ function SummaryCard({
           </ResponsiveContainer>
         </div>
         <p className="mt-1 text-right text-xs text-[var(--color-muted)]">
-          {chartUnit} · km
+          {chartUnitLabel} · {chartUnit}
         </p>
       </div>
       {period === 'day' && (

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import type { Activity } from '../types';
 import { formatDistance } from '../hooks/useActivities';
 import { useLocale } from '../hooks/useLocale';
+import { activityDay, activityYear } from '../core/domain/calendar';
 
 interface CalendarWidgetProps {
   activities: Activity[];
@@ -27,12 +28,13 @@ export function CalendarWidget({
   );
   const initial = selectedActivity?.start_date_local || latest;
   const [month, setMonth] = useState(() => {
-    const date = initial ? new Date(initial) : today;
-    return new Date(date.getFullYear(), date.getMonth(), 1);
+    return initial
+      ? new Date(activityYear(initial), Number(initial.slice(5, 7)) - 1, 1)
+      : new Date(today.getFullYear(), today.getMonth(), 1);
   });
   const [day, setDay] = useState<number | null>(() =>
     selectedActivity
-      ? new Date(selectedActivity.start_date_local).getDate()
+      ? Number(selectedActivity.start_date_local.slice(8, 10))
       : null
   );
   const [previousSelection, setPreviousSelection] = useState(
@@ -41,9 +43,9 @@ export function CalendarWidget({
   if (previousSelection !== selectedActivity?.run_id) {
     setPreviousSelection(selectedActivity?.run_id);
     if (selectedActivity) {
-      const date = new Date(selectedActivity.start_date_local);
-      setMonth(new Date(date.getFullYear(), date.getMonth(), 1));
-      setDay(date.getDate());
+      const date = activityDay(selectedActivity.start_date_local);
+      setMonth(new Date(activityYear(date), Number(date.slice(5, 7)) - 1, 1));
+      setDay(Number(date.slice(8, 10)));
     }
   }
   const year = month.getFullYear();
@@ -51,11 +53,15 @@ export function CalendarWidget({
   const byDay = useMemo(() => {
     const result = new Map<number, Activity[]>();
     for (const activity of activities) {
-      const date = new Date(activity.start_date_local);
-      if (date.getFullYear() === year && date.getMonth() === monthIndex) {
-        const list = result.get(date.getDate()) ?? [];
+      const date = activityDay(activity.start_date_local);
+      if (
+        activityYear(date) === year &&
+        Number(date.slice(5, 7)) === monthIndex + 1
+      ) {
+        const dayNumber = Number(date.slice(8, 10));
+        const list = result.get(dayNumber) ?? [];
         list.push(activity);
-        result.set(date.getDate(), list);
+        result.set(dayNumber, list);
       }
     }
     for (const list of result.values())
@@ -117,7 +123,15 @@ export function CalendarWidget({
         {latest && (
           <button
             className="rounded px-2 hover:bg-[var(--color-bg)]"
-            onClick={() => goToDate(new Date(latest))}
+            onClick={() =>
+              goToDate(
+                new Date(
+                  activityYear(latest),
+                  Number(latest.slice(5, 7)) - 1,
+                  1
+                )
+              )
+            }
           >
             {zh ? '最近活动' : 'Latest'}
           </button>

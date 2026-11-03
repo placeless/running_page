@@ -144,3 +144,36 @@ their stable timestamp-derived IDs, including corrected local dates.
 The imported-file manifest is deduplicated, and older unchanged FITs
 remain cached. The `2026-06-30` cutover remains in place to avoid
 cross-provider duplicate records.
+
+## Automated count-only reconciliation (Batch 1)
+
+The COROS sync now writes only its **post-cutover activity IDs** to
+`private/coros-index.json` in the ephemeral GitHub Actions runner. It is
+excluded from Git; the workflow never stages it or logs its contents.
+
+After the privacy export passes validation, `run_page/reconciliation.py`
+audits the latest provider index against:
+
+1. FIT existence and basic `.FIT` header integrity;
+2. the private `imported.json` manifest;
+3. the SQLite activity count, using a read-only connection; and
+4. the public date/type record counts and total distance, respecting the
+   configured privacy publication cutoff.
+
+The result prints **aggregate counts only**: no provider IDs, activity names,
+exact dates, coordinates, URLs, filenames or database paths. Missing, invalid
+or unimported FITs trigger a workflow warning. A mismatch between the
+eligible SQLite totals and the public JSON blocks publication. COROS will
+retry invalid cached FITs instead of treating any nonempty file as complete.
+
+The optional `--deep-fit` mode additionally decodes FIT session timestamps
+and checks the timestamp-derived ID against SQLite. It is intentionally not
+part of every scheduled sync because it must decode all selected FIT files;
+use it for private, read-only incident investigations.
+
+**Scope limit:** FIT header integrity is not a full FIT decoding check, and
+an imported-file manifest entry does not independently prove a database row
+exists. The deep audit can identify those gaps. None of these checks can
+prove the provider's query returns every historical activity; that still
+requires a separately verified source inventory. The original 937/955
+figures above describe historical snapshots, not today's public count.

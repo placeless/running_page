@@ -107,6 +107,12 @@ Vercel-hosted frontend consumes after its existing Git deployment rebuild.
 No Cloudflare Worker, D1 database, Strava subscription or Strava OAuth token is
 needed to perform this sync.
 
+The sync now includes an aggregate-only reconciliation step. A private,
+ephemeral COROS index is compared with downloaded FIT files, the private
+import manifest, read-only SQLite counts, and privacy-filtered public
+totals. Discrepancies in public data block publication; FIT inventory gaps
+are surfaced as warnings. See [data-integrity.md](data-integrity.md).
+
 The sync workflow is serialized across scheduled and manual runs to avoid
 concurrent writes to the private archive and public branch. Original FIT/GPX/
 SQLite data is never saved to GitHub Actions Cache; the optional GitHub Pages

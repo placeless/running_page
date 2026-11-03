@@ -1,8 +1,15 @@
 import { memo, useState } from 'react';
 import type { Activity, SportFilter } from '../types';
-import { formatDistance, parseMovingTime } from '../hooks/useActivities';
+import { formatDistance } from '../hooks/useActivities';
 import { useLocale } from '../hooks/useLocale';
 import { GOALS, DEFAULT_GOAL } from '../config';
+import {
+  activityStreaks,
+  addCalendarDays,
+  mondayOf,
+  todayLocal,
+} from '../core/domain/calendar';
+import { dashboardPeriods } from '../core/domain/periods';
 
 interface StatsCardsProps {
   activities: Activity[];
@@ -29,271 +36,38 @@ export const StatsCards = memo(function StatsCards({
   const monthGoalMins = goal.unit === 'time' ? goal.monthly : 0;
   const weekGoalMins = goal.unit === 'time' ? goal.weekly : 0;
 
-  // Current year stats (for yearly goal)
   const [now] = useState(() => new Date());
-  const currentYear = year ?? now.getFullYear();
-  const yearActivities = activities.filter((a) => {
-    const d = new Date(a.start_date_local);
-    return d.getFullYear() === currentYear;
-  });
-  const yearDistance = yearActivities.reduce((s, a) => s + a.distance, 0);
-  const yearCount = yearActivities.length;
-  const yearSeconds = yearActivities.reduce(
-    (s, a) => s + parseMovingTime(a.moving_time),
-    0
-  );
-
-  // Last year same period comparison
-  const dayOfYear = Math.floor(
-    (now.getTime() - new Date(now.getFullYear(), 0, 1).getTime()) / 86400000
-  );
-  const lastYearActivities = allActivities.filter((a) => {
-    const d = new Date(a.start_date_local);
-    if (d.getFullYear() !== currentYear - 1) return false;
-    if (filter !== 'all' && a.type !== filter) return false;
-    const aDayOfYear = Math.floor(
-      (d.getTime() - new Date(d.getFullYear(), 0, 1).getTime()) / 86400000
-    );
-    return aDayOfYear <= dayOfYear;
-  });
-  const lastYearDistance = lastYearActivities.reduce(
-    (s, a) => s + a.distance,
-    0
-  );
-  const lastYearSeconds = lastYearActivities.reduce(
-    (s, a) => s + parseMovingTime(a.moving_time),
-    0
-  );
-  // Unit-aware diff: seconds in time mode, meters in distance mode
-  const yearDiff =
+  const today = todayLocal(now);
+  const { thisYear, lastYear, thisMonth, lastMonth, thisWeek, lastWeek } =
+    dashboardPeriods(activities, allActivities, year, filter, today);
+  const yearDistance = thisYear.distance;
+  const yearSeconds = thisYear.seconds;
+  const yearCount = thisYear.count;
+  const monthDistance = thisMonth.distance;
+  const monthSeconds = thisMonth.seconds;
+  const monthCount = thisMonth.count;
+  const weekDistance = thisWeek.distance;
+  const weekSeconds = thisWeek.seconds;
+  const weekCount = thisWeek.count;
+  const comparedValue = (
+    current: { distance: number; seconds: number },
+    previous: { distance: number; seconds: number }
+  ) =>
     goal.unit === 'time'
-      ? yearSeconds - lastYearSeconds
-      : yearDistance - lastYearDistance;
+      ? current.seconds - previous.seconds
+      : current.distance - previous.distance;
+  const yearDiff = comparedValue(thisYear, lastYear);
+  const monthDiff = comparedValue(thisMonth, lastMonth);
+  const weekDiff = comparedValue(thisWeek, lastWeek);
+  const {
+    currentDays: currentStreak,
+    currentWeeks: currentWeekStreak,
+    longestDays: longestStreak,
+    longestWeeks: longestWeekStreak,
+  } = activityStreaks(activities, today);
 
-  // Current month stats — always reflects the current calendar month,
-  // independent of the year selected for the yearly card (H2 fix).
-  const monthActivities = allActivities.filter((a) => {
-    const d = new Date(a.start_date_local);
-    if (
-      d.getFullYear() !== now.getFullYear() ||
-      d.getMonth() !== now.getMonth()
-    )
-      return false;
-    if (filter !== 'all' && a.type !== filter) return false;
-    return true;
-  });
-  const monthDistance = monthActivities.reduce((s, a) => s + a.distance, 0);
-  const monthCount = monthActivities.length;
-  const monthSeconds = monthActivities.reduce(
-    (s, a) => s + parseMovingTime(a.moving_time),
-    0
-  );
-
-  // Last month same period comparison
-  const lastMonthActivities = allActivities.filter((a) => {
-    const d = new Date(a.start_date_local);
-    const targetMonth = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
-    const targetYear =
-      now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
-    if (d.getFullYear() !== targetYear || d.getMonth() !== targetMonth)
-      return false;
-    if (filter !== 'all' && a.type !== filter) return false;
-    return d.getDate() <= now.getDate();
-  });
-  const lastMonthDistance = lastMonthActivities.reduce(
-    (s, a) => s + a.distance,
-    0
-  );
-  const lastMonthSeconds = lastMonthActivities.reduce(
-    (s, a) => s + parseMovingTime(a.moving_time),
-    0
-  );
-  const monthDiff =
-    goal.unit === 'time'
-      ? monthSeconds - lastMonthSeconds
-      : monthDistance - lastMonthDistance;
-
-  // Current week stats — week starts on Monday
-  const dayOfWeek = now.getDay(); // 0=Sun
-  const daysSinceMon = (dayOfWeek + 6) % 7; // Mon=0 … Sun=6
-  const weekStart = new Date(now.getTime() - daysSinceMon * 86400000);
-  weekStart.setHours(0, 0, 0, 0);
-  const weekActivities = allActivities.filter((a) => {
-    const d = new Date(a.start_date_local);
-    if (d < weekStart) return false;
-    if (filter !== 'all' && a.type !== filter) return false;
-    return true;
-  });
-  const weekDistance = weekActivities.reduce((s, a) => s + a.distance, 0);
-  const weekCount = weekActivities.length;
-  const weekSeconds = weekActivities.reduce(
-    (s, a) => s + parseMovingTime(a.moving_time),
-    0
-  );
-
-  // Last week same period comparison
-  const lastWeekStart = new Date(weekStart.getTime() - 7 * 86400000);
-  const lastWeekSamePoint = new Date(now.getTime() - 7 * 86400000);
-  const lastWeekActivities = allActivities.filter((a) => {
-    const d = new Date(a.start_date_local);
-    if (d < lastWeekStart || d > lastWeekSamePoint) return false;
-    if (filter !== 'all' && a.type !== filter) return false;
-    return true;
-  });
-  const lastWeekDistance = lastWeekActivities.reduce(
-    (s, a) => s + a.distance,
-    0
-  );
-  const lastWeekSeconds = lastWeekActivities.reduce(
-    (s, a) => s + parseMovingTime(a.moving_time),
-    0
-  );
-  const weekDiff =
-    goal.unit === 'time'
-      ? weekSeconds - lastWeekSeconds
-      : weekDistance - lastWeekDistance;
-
-  // Use local date string to avoid UTC offset issues
-  function toLocalDateStr(d: Date): string {
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  }
-
-  // Streak calculation (consecutive days with activity)
-  const sortedDates = [
-    ...new Set(activities.map((a) => a.start_date_local.slice(0, 10))),
-  ]
-    .sort()
-    .reverse();
-
-  let currentStreak = 0;
-  if (sortedDates.length > 0) {
-    const today = toLocalDateStr(now);
-    const yesterday = toLocalDateStr(new Date(now.getTime() - 86400000));
-    if (sortedDates[0] === today || sortedDates[0] === yesterday) {
-      let expected = sortedDates[0];
-      for (const dateStr of sortedDates) {
-        if (dateStr === expected) {
-          currentStreak++;
-          const prev = new Date(expected + 'T12:00:00');
-          prev.setDate(prev.getDate() - 1);
-          expected = toLocalDateStr(prev);
-        } else {
-          break;
-        }
-      }
-    }
-  }
-
-  // Week streak (consecutive weeks with activity) using simple week number
-  function getWeekNumber(d: Date): number {
-    const start = new Date(d.getFullYear(), 0, 1);
-    return Math.floor(
-      ((d.getTime() - start.getTime()) / 86400000 + start.getDay()) / 7
-    );
-  }
-
-  const weekSet = new Set(
-    activities.map((a) => {
-      const d = new Date(a.start_date_local);
-      return `${d.getFullYear()}-${getWeekNumber(d)}`;
-    })
-  );
-
-  let currentWeekStreak = 0;
-  {
-    let d = new Date(now);
-    // Check current week first
-    const currKey = `${d.getFullYear()}-${getWeekNumber(d)}`;
-    if (weekSet.has(currKey)) {
-      // Count backwards from current week
-      const seen = new Set<string>();
-      while (true) {
-        const key = `${d.getFullYear()}-${getWeekNumber(d)}`;
-        if (weekSet.has(key) && !seen.has(key)) {
-          seen.add(key);
-          currentWeekStreak++;
-          d = new Date(d.getTime() - 7 * 86400000);
-        } else {
-          break;
-        }
-      }
-    } else {
-      // Try last week
-      d = new Date(now.getTime() - 7 * 86400000);
-      if (weekSet.has(`${d.getFullYear()}-${getWeekNumber(d)}`)) {
-        const seen = new Set<string>();
-        while (true) {
-          const key = `${d.getFullYear()}-${getWeekNumber(d)}`;
-          if (weekSet.has(key) && !seen.has(key)) {
-            seen.add(key);
-            currentWeekStreak++;
-            d = new Date(d.getTime() - 7 * 86400000);
-          } else {
-            break;
-          }
-        }
-      }
-    }
-  }
-
-  // Longest streak ever
-  let longestStreak = 0;
-  if (sortedDates.length > 0) {
-    const ascending = [...sortedDates].reverse();
-    let streak = 1;
-    for (let i = 1; i < ascending.length; i++) {
-      const prev = new Date(ascending[i - 1] + 'T00:00:00');
-      const curr = new Date(ascending[i] + 'T00:00:00');
-      const diff = (curr.getTime() - prev.getTime()) / 86400000;
-      if (diff === 1) {
-        streak++;
-      } else {
-        longestStreak = Math.max(longestStreak, streak);
-        streak = 1;
-      }
-    }
-    longestStreak = Math.max(longestStreak, streak);
-  }
-
-  // Longest week streak - iterate all weeks from earliest to latest
-  let longestWeekStreak = 0;
-  {
-    // Get all activity dates, find range, check each week
-    if (activities.length > 0) {
-      const earliest = new Date(
-        Math.min(
-          ...activities.map((a) => new Date(a.start_date_local).getTime())
-        )
-      );
-      const latest = new Date(
-        Math.max(
-          ...activities.map((a) => new Date(a.start_date_local).getTime())
-        )
-      );
-      let streak = 0;
-      let d = new Date(earliest);
-      while (d <= latest) {
-        const key = `${d.getFullYear()}-${getWeekNumber(d)}`;
-        if (weekSet.has(key)) {
-          streak++;
-          longestWeekStreak = Math.max(longestWeekStreak, streak);
-        } else {
-          streak = 0;
-        }
-        d = new Date(d.getTime() + 7 * 86400000);
-      }
-    }
-  }
-
-  const formatHours = (secs: number) => {
-    const h = (secs / 3600).toFixed(1);
-    return `${h}h`;
-  };
-
+  const formatHours = (secs: number) => `${(secs / 3600).toFixed(1)}h`;
   const unit = filter === 'Run' ? t('runs') : t('activities');
-
-  const todayIdx = (now.getDay() + 6) % 7; // Mon=0 … Sun=6
-  const visualWeekStart = new Date(now.getTime() - todayIdx * 86400000);
   const weekLabels =
     locale === 'zh'
       ? ['一', '二', '三', '四', '五', '六', '日']
@@ -301,23 +75,21 @@ export const StatsCards = memo(function StatsCards({
 
   function dayColor(acts: Activity[]): string {
     if (acts.length === 0) return '';
-    const sorted = [...acts].sort((a, b) => b.distance - a.distance);
-    const type = sorted[0].type;
-    if (type === 'Run') return '#f97316';
-    return 'var(--color-text)';
+    const type = [...acts].sort((a, b) => b.distance - a.distance)[0].type;
+    return type === 'Run' ? '#f97316' : 'var(--color-text)';
   }
 
+  const monday = mondayOf(today);
   const weekDays = Array.from({ length: 7 }, (_, i) => {
-    const date = new Date(visualWeekStart.getTime() + i * 86400000);
-    const key = toLocalDateStr(date);
+    const key = addCalendarDays(monday, i);
     const dayActs = activities.filter(
       (a) => a.start_date_local.slice(0, 10) === key
     );
     return {
       key,
-      day: date.getDate(),
+      day: Number(key.slice(8, 10)),
       hasActivity: dayActs.length > 0,
-      isToday: i === todayIdx,
+      isToday: key === today,
       acts: dayActs,
     };
   });
@@ -576,8 +348,7 @@ export const StatsCards = memo(function StatsCards({
           </div>
           <div className="flex flex-1 items-center gap-1.5">
             {weekDays.map((wd, i) => {
-              const isPast =
-                new Date(visualWeekStart.getTime() + i * 86400000) <= now;
+              const isPast = wd.key <= today;
               const color = dayColor(wd.acts);
               return (
                 <div

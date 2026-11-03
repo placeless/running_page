@@ -32,6 +32,35 @@ Remaining: confirm the legitimate signed storage hostname(s) in a private
 runtime before optionally enabling `COROS_DOWNLOAD_ALLOWED_HOSTS`; validate the
 new CI and end-to-end sync in GitHub Actions only after review and merge.
 
+### Batch 1 implementation status
+
+Implemented locally on `review/batch-1-data-correctness`, based on Batch 0:
+
+- Pure domain modules under `src/core/domain/` now own provider-local
+  calendar dates, streaks, aligned period comparisons, sport-scoped metrics,
+  and full-activity distance matching.
+- Dashboard, Tracks, Summary, profile, calendar, and heatmap callers were
+  updated for date-only exports. Daily charts aggregate by sport and minutes;
+  they no longer fabricate a start-time histogram.
+- Historical years compare complete years; present YTD/month/week compare
+  equal calendar windows with leap-day/month-end clamping. Running pace uses
+  total running distance divided by total running time.
+- The old "Personal Best" card now explicitly describes nearby-distance
+  **full activity** times, with actual recorded distance and ±1% tolerance,
+  not verified event PBs or segment efforts. The component has been renamed
+  from \`PersonalBest\` to \`MatchedRunTimes\` to match its actual responsibility.
+- Private COROS sync now produces a disposable, ignored activity-ID list for
+  aggregate source/FIT/manifest/SQLite/public reconciliation. The auditor
+  reads SQLite without modifying it and logs no identifiers or locations.
+- FIT files with an invalid header are re-fetched instead of perpetually
+  considered cached. Optional deep FIT-to-DB identity matching remains
+  an explicit manual audit rather than a daily decoding cost.
+
+Validation: synthetic Node domain tests on two timezones, Python reconciliation
+and importer tests, static checks and a production build. Live GitHub Actions
+sync and browser/visual tests remain outstanding; no private data was opened
+to validate this batch.
+
 ## Ground rules
 
 - Preserve the upstream merge path; never push to `yihong0618/running_page`.

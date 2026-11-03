@@ -50,10 +50,8 @@ export function ActivityLog({
           return true;
       }
     });
-    return filtered.sort(
-      (a, b) =>
-        new Date(b.start_date_local).getTime() -
-        new Date(a.start_date_local).getTime()
+    return filtered.sort((a, b) =>
+      b.start_date_local.localeCompare(a.start_date_local)
     );
   }, [activities, distFilter]);
   const selectedId = selectedActivity?.run_id;

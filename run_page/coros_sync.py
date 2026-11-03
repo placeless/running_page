@@ -2,10 +2,12 @@ import argparse
 import asyncio
 import hashlib
 import ipaddress
+import json
 import os
 import tempfile
 import time
 from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 
 import aiofiles
 import httpx
@@ -286,14 +288,36 @@ def activity_date(activity):
     return datetime.fromisoformat(str(value)).date()
 
 
-def get_downloaded_ids(folder):
-    return {
-        os.path.splitext(i)[0]
-        for i in os.listdir(folder)
-        if not i.startswith(".")
-        and os.path.isfile(os.path.join(folder, i))
-        and os.path.getsize(os.path.join(folder, i)) > 0
-    }
+def get_downloaded_ids(folder, file_type="fit"):
+    """Only consider nonempty, valid-header FIT files as already downloaded."""
+    downloaded = set()
+    for name in os.listdir(folder):
+        file = Path(folder) / name
+        if name.startswith(".") or not name.endswith(f".{file_type}"):
+            continue
+        if not file.is_file() or file.is_symlink() or file.stat().st_size == 0:
+            continue
+        if file_type == "fit":
+            with file.open("rb") as stream:
+                if stream.read(12)[8:12] != b".FIT":
+                    continue
+        downloaded.add(file.stem)
+    return downloaded
+
+
+def save_private_audit_index(path, activities):
+    """Persist only private COROS IDs for a count-only post-sync audit."""
+    destination = Path(path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(
+        prefix=".coros-index-", suffix=".tmp", dir=destination.parent
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            json.dump([str(activity["labelId"]) for activity in activities], stream)
+        os.replace(temporary, destination)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
 
 
 def select_download_ids(activities, downloaded_ids, *, today, refresh_recent_days):
@@ -316,7 +340,7 @@ async def download_and_generate(
     account, password, only_run, file_type, since=None, refresh_recent_days=7
 ):
     folder = FOLDER_DICT[file_type]
-    downloaded_ids = get_downloaded_ids(folder)
+    downloaded_ids = get_downloaded_ids(folder, file_type)
     coros = Coros(account, password)
     await coros.init()
     try:
@@ -327,6 +351,9 @@ async def download_and_generate(
                 for activity in activity_infos
                 if activity_date(activity) >= since
             ]
+        audit_path = os.getenv("RUNNING_AUDIT_INDEX_FILE")
+        if audit_path:
+            save_private_audit_index(audit_path, activity_infos)
         activity_by_id = {
             str(activity["labelId"]): activity for activity in activity_infos
         }

@@ -77,7 +77,9 @@ def test_coros_cutover_keeps_existing_archive_and_skips_old_downloads(
 ):
     fit_dir = tmp_path / "FIT_OUT"
     fit_dir.mkdir()
-    (fit_dir / "new-cached.fit").write_bytes(b"existing")
+    (fit_dir / "new-cached.fit").write_bytes(
+        b"\x0e\x10\x00\x00\x00\x00\x00\x00.FITexisting"
+    )
     events = []
 
     class FakeCoros:
@@ -143,10 +145,32 @@ def test_recent_activity_selection_checks_cached_fits_each_run():
     assert refreshed == 0
 
 
+def test_coros_invalid_cached_fit_is_refetched_even_if_old(tmp_path):
+    fit_dir = tmp_path / "FIT_OUT"
+    fit_dir.mkdir()
+    (fit_dir / "valid.fit").write_bytes(b"\x0e\x10\x00\x00\x00\x00\x00\x00.FITdata")
+    (fit_dir / "corrupt.fit").write_bytes(b"not a FIT despite nonempty bytes")
+    (fit_dir / "empty.fit").write_bytes(b"")
+    (fit_dir / "other.gpx").write_bytes(b"not a fit")
+    downloaded = coros_sync.get_downloaded_ids(fit_dir, "fit")
+    assert downloaded == {"valid"}
+    selected, _ = coros_sync.select_download_ids(
+        {
+            "valid": {"date": 20260701},
+            "corrupt": {"date": 20260701},
+            "empty": {"date": 20260701},
+        },
+        downloaded,
+        today=date(2026, 11, 3),
+        refresh_recent_days=7,
+    )
+    assert selected == ["corrupt", "empty"]
+
+
 def test_coros_run_refreshes_existing_latest_fit(monkeypatch, tmp_path):
     fit_dir = tmp_path / "FIT_OUT"
     fit_dir.mkdir()
-    (fit_dir / "42.fit").write_bytes(b"already downloaded")
+    (fit_dir / "42.fit").write_bytes(b"\x0e\x10\x00\x00\x00\x00\x00\x00.FITcached")
     today = datetime.now(UTC).date()
     calls = []
 
@@ -176,6 +200,8 @@ def test_coros_run_refreshes_existing_latest_fit(monkeypatch, tmp_path):
     published = []
     monkeypatch.setattr(coros_sync, "Coros", FakeCoros)
     monkeypatch.setattr(coros_sync, "FOLDER_DICT", {"fit": str(fit_dir)})
+    audit_path = tmp_path / "private" / "coros-index.json"
+    monkeypatch.setenv("RUNNING_AUDIT_INDEX_FILE", str(audit_path))
     monkeypatch.setattr(
         coros_sync,
         "make_activities_file",
@@ -194,6 +220,7 @@ def test_coros_run_refreshes_existing_latest_fit(monkeypatch, tmp_path):
     assert calls == ["42"]
     assert published[0]["refresh_file_names"] == {"42.fit"}
     assert published[0]["activity_local_dates"] == {"42": today}
+    assert json.loads(audit_path.read_text()) == ["42"]
 
 
 def test_invalid_refresh_window_fails_before_download():

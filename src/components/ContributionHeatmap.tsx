@@ -8,6 +8,7 @@ import {
   formatPace,
 } from '../hooks/useActivities';
 import { useLocale } from '../hooks/useLocale';
+import { activityYear, addCalendarDays } from '../core/domain/calendar';
 
 const MAX_VISIBLE_YEARS = 10;
 // One week column: h-3/w-3 cell (12px) + gap-[3px]
@@ -89,7 +90,7 @@ function buildYearGrid(
   isAll: boolean
 ) {
   const yearActivities = acts.filter(
-    (a) => new Date(a.start_date_local).getFullYear() === yr
+    (a) => activityYear(a.start_date_local) === yr
   );
 
   const totalDist = yearActivities.reduce((s, a) => s + a.distance, 0);
@@ -144,8 +145,7 @@ function buildYearGrid(
 
   const maxVal = Math.max(...dayMap.values(), 1);
 
-  const startDate = new Date(yr, 0, 1);
-  const startDay = startDate.getDay();
+  const startDay = new Date(Date.UTC(yr, 0, 1)).getUTCDay();
   const grid: {
     date: string;
     distance: number;
@@ -156,16 +156,13 @@ function buildYearGrid(
   }[][] = [];
   const monthPositions: { label: string; weekIdx: number }[] = [];
   let currentMonth = -1;
-  const totalDays =
-    Math.round(
-      (new Date(yr, 11, 31).getTime() - startDate.getTime()) / 86400000
-    ) + 1;
+  const totalDays = (Date.UTC(yr + 1, 0, 1) - Date.UTC(yr, 0, 1)) / 86400000;
 
   for (let d = 0; d < totalDays; d++) {
-    const date = new Date(yr, 0, 1 + d);
+    const date = addCalendarDays(`${yr}-01-01`, d);
     const weekIdx = Math.floor((d + startDay) / 7);
     while (grid.length <= weekIdx) grid.push([]);
-    const key = `${yr}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    const key = date;
     const dayActs = dayActivitiesMap.get(key) || [];
     const dist = dayMap.get(key) || 0;
     const domType = dominantDisplayType(dayActs);
@@ -182,8 +179,9 @@ function buildYearGrid(
       domType,
       typeRatio,
     });
-    if (date.getMonth() !== currentMonth) {
-      currentMonth = date.getMonth();
+    const monthIndex = Number(date.slice(5, 7)) - 1;
+    if (monthIndex !== currentMonth) {
+      currentMonth = monthIndex;
       monthPositions.push({ label: `${currentMonth + 1}`, weekIdx });
     }
   }
@@ -266,7 +264,7 @@ export const ContributionHeatmap = memo(function ContributionHeatmap({
         .filter(
           (a) =>
             yearToCheck === null ||
-            new Date(a.start_date_local).getFullYear() === yearToCheck
+            activityYear(a.start_date_local) === yearToCheck
         )
         .map((a) => toDisplayType(a.type))
     );
@@ -278,8 +276,10 @@ export const ContributionHeatmap = memo(function ContributionHeatmap({
     if (!isGym || selectedYear === 'all') return [];
     return Array.from({ length: 12 }, (_, m) => {
       const monthActs = activities.filter((a) => {
-        const d = new Date(a.start_date_local);
-        return d.getFullYear() === selectedYear && d.getMonth() === m;
+        return (
+          activityYear(a.start_date_local) === selectedYear &&
+          Number(a.start_date_local.slice(5, 7)) === m + 1
+        );
       });
       const byType = Object.fromEntries([] as [string, number][]);
       return { month: m, total: monthActs.length, byType };

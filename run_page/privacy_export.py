@@ -211,21 +211,24 @@ def _public_date(value):
     return dt.date.fromisoformat(value[:10]).isoformat()
 
 
-def export_public_activities(activities, *, policy=None, now=None):
-    """Prepare safe, date-only public records; no source records are mutated."""
-    policy = _validated_policy(policy) if policy is not None else load_policy()
-    now = now or dt.datetime.now(dt.UTC)
+def publication_cutoff(policy, now):
+    """UTC cutoff for public date-only records (shared with the private audit)."""
     if now.tzinfo is None:
         raise ValueError("now must be timezone-aware")
-    # An explicit zero delay publishes all dates up through today as soon
-    # as the sync finishes. Positive delays retain a conservative one-day
-    # margin because the public data is intentionally date-only.
     delay_hours = policy["delay_hours"]
-    cutoff = (
+    return (
         now.date()
         if delay_hours == 0
         else (now - dt.timedelta(hours=delay_hours + 24)).date()
     )
+
+
+def export_public_activities(activities, *, policy=None, now=None):
+    """Prepare safe, date-only public records; no source records are mutated."""
+    policy = _validated_policy(policy) if policy is not None else load_policy()
+    now = now or dt.datetime.now(dt.UTC)
+    # Keep the audit and the public exporter on the exact same cutoff.
+    cutoff = publication_cutoff(policy, now)
     result = []
     for activity in activities:
         day = _public_date(activity["start_date_local"])

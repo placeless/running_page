@@ -24,8 +24,9 @@ import { ActivityLog } from '@/components/ActivityLog';
 import { RouteMap } from '@/components/RouteMap';
 import { CalendarWidget } from '@/components/CalendarWidget';
 import { ProfileCard } from '@/components/ProfileCard';
-import { PersonalBest } from '@/components/PersonalBest';
+import { MatchedRunTimes } from '@/components/MatchedRunTimes';
 import { FootprintMap } from '@/components/FootprintMap';
+import { activityYear } from '@/core/domain/calendar';
 
 const TracksPage = lazy(() =>
   import('@/components/TracksPage').then((module) => ({
@@ -123,11 +124,8 @@ function Dashboard() {
             })
           );
         }
-        if (
-          year !== null &&
-          new Date(activity.start_date_local).getFullYear() !== year
-        ) {
-          setYear(new Date(activity.start_date_local).getFullYear());
+        if (year !== null && activityYear(activity.start_date_local) !== year) {
+          setYear(activityYear(activity.start_date_local));
         }
       }
     },
@@ -230,7 +228,7 @@ function Dashboard() {
                     onClearSelection={() => setSelectedActivity(null)}
                   />
                 </div>
-                <PersonalBest
+                <MatchedRunTimes
                   activities={activities}
                   onSelectActivity={selectActivity}
                 />

@@ -1,9 +1,9 @@
 import { memo } from 'react';
 import type { Activity } from '../types';
 import { useLocale } from '../hooks/useLocale';
-import { parseMovingTime } from '../hooks/useActivities';
+import { matchedFullRuns } from '../core/domain/bests';
 
-interface PersonalBestProps {
+interface MatchedRunTimesProps {
   activities: Activity[];
   onSelectActivity?: (a: Activity | null) => void;
 }
@@ -17,27 +17,11 @@ function formatTime(seconds: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-const DISTANCES = [
-  { key: '5K', min: 4.8, max: 5.5 },
-  { key: '10K', min: 9.5, max: 11 },
-  { key: 'Half Marathon', min: 20, max: 22.5 },
-  { key: 'Marathon', min: 41, max: 44 },
-];
-
-export const PersonalBest = memo(function PersonalBest({
+export const MatchedRunTimes = memo(function MatchedRunTimes({
   activities,
   onSelectActivity,
-}: PersonalBestProps) {
+}: MatchedRunTimesProps) {
   const { locale } = useLocale();
-
-  // Privacy-safe exports may suppress GPS without suppressing race results.
-  // Use recorded distance/time instead of coupling personal bests to geometry.
-  const runs = activities.filter(
-    (a) =>
-      a.type === 'Run' &&
-      a.distance > 0 &&
-      !/treadmill|indoor/i.test(a.subtype ?? '')
-  );
 
   const labels: Record<string, string> =
     locale === 'zh'
@@ -54,23 +38,7 @@ export const PersonalBest = memo(function PersonalBest({
           Marathon: 'Marathon',
         };
 
-  const bests = DISTANCES.map(({ key, min, max }) => {
-    const matching = runs.filter((a) => {
-      const km = a.distance / 1000;
-      if (km < min || km > max) return false;
-      // Filter out GPS drift: pace must be reasonable (3:00/km ~ 8:00/km)
-      const time = parseMovingTime(a.moving_time);
-      const pacePerKm = time / km; // seconds per km
-      return pacePerKm >= 180 && pacePerKm <= 480; // 3min/km to 8min/km
-    });
-    if (matching.length === 0) return { key, activity: null, time: 0 };
-    const best = matching.reduce((b, a) => {
-      return parseMovingTime(a.moving_time) < parseMovingTime(b.moving_time)
-        ? a
-        : b;
-    });
-    return { key, activity: best, time: parseMovingTime(best.moving_time) };
-  });
+  const bests = matchedFullRuns(activities);
 
   const hasBests = bests.some((b) => b.activity !== null);
   if (!hasBests) return null;
@@ -91,11 +59,16 @@ export const PersonalBest = memo(function PersonalBest({
             d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
           />
         </svg>
-        {locale === 'zh' ? '个人最佳' : 'Personal Best'}
+        {locale === 'zh' ? '近标准距离最快活动' : 'Fastest Matched Activities'}
       </h3>
+      <p className="mb-2 text-xs text-[var(--color-muted)]">
+        {locale === 'zh'
+          ? '按完整活动距离（±1%）匹配；非官方赛事 PB 或精确分段成绩。'
+          : 'Full activities within ±1% of each distance; not verified race PBs or splits.'}
+      </p>
 
       <div className="divide-y divide-[var(--color-border)]">
-        {bests.map(({ key, activity, time }) => (
+        {bests.map(({ key, activity, seconds }) => (
           <button
             type="button"
             disabled={!activity || !onSelectActivity}
@@ -109,11 +82,16 @@ export const PersonalBest = memo(function PersonalBest({
           >
             <span className="text-xs text-[var(--color-text)]">
               {labels[key]}
+              {activity && (
+                <span className="ml-1 text-[var(--color-muted)]">
+                  ({(activity.distance / 1000).toFixed(2)} km)
+                </span>
+              )}
             </span>
             <span
               className={`font-mono text-xs font-bold ${activity ? 'text-[var(--color-accent)]' : 'text-[var(--color-muted)]'}`}
             >
-              {activity ? formatTime(time) : '--'}
+              {activity ? formatTime(seconds) : '--'}
             </span>
           </button>
         ))}

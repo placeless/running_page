@@ -171,6 +171,7 @@ jobs:
       - name: Run sync Coros script
         if: env.RUN_TYPE == 'coros'
         env:
+          RUNNING_AUDIT_INDEX_FILE: private/coros-index.json
           COROS_ACCOUNT: ${{ secrets.COROS_ACCOUNT }}
           COROS_PASSWORD: ${{ secrets.COROS_PASSWORD }}
         run: |
@@ -303,6 +304,15 @@ jobs:
         if: env.RUN_TYPE != 'pass'
         run: |
           python run_page/privacy_export.py --check src/static/activities.json
+
+      - name: Reconcile private COROS inventory with public totals
+        if: env.RUN_TYPE == 'coros'
+        run: |
+          # Count-only diagnostics; never print provider IDs or locations.
+          python run_page/reconciliation.py \
+            --index private/coros-index.json \
+            --fit-dir FIT_OUT --manifest imported.json \
+            --database run_page/data.db --public src/static/activities.json
 
       - name: Back up original GPS data to private archive
         if: env.RUN_TYPE != 'pass'
