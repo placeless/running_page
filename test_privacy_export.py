@@ -87,6 +87,29 @@ def test_workflow_delay_override_preserves_private_policy(monkeypatch, tmp_path)
     assert [x["start_date_local"] for x in exported] == ["2026-11-08"]
 
 
+def test_zero_delay_publishes_current_date_without_hidden_extra_day(
+    monkeypatch, tmp_path
+):
+    path = tmp_path / "privacy.json"
+    path.write_text(json.dumps(ROUTES), encoding="utf-8")
+    monkeypatch.setenv("RUNNING_PRIVACY_CONFIG", str(path))
+    monkeypatch.setenv("RUNNING_PRIVACY_DELAY_HOURS", "0")
+    policy = load_policy()
+    assert policy["delay_hours"] == 0
+    assert policy["mode"] == "routes"
+    assert policy["zones"] == ROUTES["zones"]
+    activities = [
+        example_activity(date="2026-11-09 20:00:00"),
+        example_activity(date="2026-11-10 07:00:00"),
+        example_activity(date="2026-11-11 09:00:00"),
+    ]
+    result = export_public_activities(activities, now=NOW)
+    assert [item["start_date_local"] for item in result] == [
+        "2026-11-09",
+        "2026-11-10",
+    ]
+
+
 @pytest.mark.parametrize("value", ["-1", "24.0", "today", "", "721"])
 def test_invalid_workflow_delay_is_rejected(monkeypatch, value):
     monkeypatch.delenv("RUNNING_PRIVACY_CONFIG", raising=False)

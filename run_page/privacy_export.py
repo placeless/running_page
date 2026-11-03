@@ -217,9 +217,15 @@ def export_public_activities(activities, *, policy=None, now=None):
     now = now or dt.datetime.now(dt.UTC)
     if now.tzinfo is None:
         raise ValueError("now must be timezone-aware")
-    # A local calendar date can differ from UTC by a day. The extra day
-    # prevents a recently completed run becoming public prematurely.
-    cutoff = (now - dt.timedelta(hours=policy["delay_hours"] + 24)).date()
+    # An explicit zero delay publishes all dates up through today as soon
+    # as the sync finishes. Positive delays retain a conservative one-day
+    # margin because the public data is intentionally date-only.
+    delay_hours = policy["delay_hours"]
+    cutoff = (
+        now.date()
+        if delay_hours == 0
+        else (now - dt.timedelta(hours=delay_hours + 24)).date()
+    )
     result = []
     for activity in activities:
         day = _public_date(activity["start_date_local"])

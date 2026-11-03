@@ -124,13 +124,15 @@ the COROS FIT archive or the SQLite records.
 
 ## Publication delay and rolling COROS refresh (current policy)
 
-The GitHub Actions workflow sets `RUNNING_PRIVACY_DELAY_HOURS=24`, overriding
+The GitHub Actions workflow sets `RUNNING_PRIVACY_DELAY_HOURS=0`, overriding
 only the publication delay in the private policy. Protected route zones,
-privacy mode, and endpoint trimming are unchanged. The calendar-date
-cutoff is `(now_utc - timedelta(hours=delay_hours + 24)).date()`,
-which means a **48-hour cutoff offset** rather than exact per-activity
-release timing. A successful scheduled sync and Vercel deployment must
-still occur before the latest eligible date appears on the website.
+privacy mode, and endpoint trimming are unchanged. With zero delay, the
+public export includes **all recorded dates through the current UTC day**
+without the extra 24-hour safety margin. Positive delay settings continue
+to use the conservative `delay_hours + 24` calendar cutoff. A successful
+scheduled sync and Vercel deployment must still occur before new data
+appears on the website; the workflow runs daily at 00:00 UTC, not
+continuously.
 
 The workflow sets `COROS_REFRESH_RECENT_DAYS=7`. Every sync queries the
 full COROS activity index since the provider cutover, downloads newly
