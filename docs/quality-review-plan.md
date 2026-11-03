@@ -5,6 +5,18 @@ Audit baseline: local `master` at `5b396187` (2026-11-03). This review concerns
 application at `placeless.net/running/`. This file preserves the **historical audit baseline**; the implementation
 status of each batch is recorded below, separately from original findings.
 
+### Post-release correction — standard-distance matches
+
+The first Batch 1 release used a symmetric ±1% distance tolerance for the
+MatchedRunTimes card. This excluded recorded race-length activities with
+normal GPS distance overrun, even when they were faster than the remaining
+candidates. Corrected the matching to accept a 1% GPS undershoot and bounded
+overruns (5K up to 5.5 km, 10K to 11 km, half-marathon to 22.5 km,
+marathon to 44 km), retaining the original reasonable running-pace guard.
+The card continues to display **full-activity moving time and actual recorded
+distance**, not an estimated distance-normalized split or certified PB.
+Synthetic regression tests verify both the overrun and outlier cases.
+
 ### Batch 0 implementation status
 
 Implemented locally on `review/batch-0-security` (not deployed):
@@ -46,7 +58,8 @@ Implemented locally on `review/batch-1-data-correctness`, based on Batch 0:
   equal calendar windows with leap-day/month-end clamping. Running pace uses
   total running distance divided by total running time.
 - The old "Personal Best" card now explicitly describes nearby-distance
-  **full activity** times, with actual recorded distance and ±1% tolerance,
+  **full activity** times, with actual recorded distance and asymmetric
+  distance bands (small GPS undershoot, larger recorded overrun),
   not verified event PBs or segment efforts. The component has been renamed
   from `PersonalBest` to `MatchedRunTimes` to match its actual responsibility.
 - Private COROS sync now produces a disposable, ignored activity-ID list for

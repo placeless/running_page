@@ -63,8 +63,8 @@ export const MatchedRunTimes = memo(function MatchedRunTimes({
       </h3>
       <p className="mb-2 text-xs text-[var(--color-muted)]">
         {locale === 'zh'
-          ? '按完整活动距离（±1%）匹配；非官方赛事 PB 或精确分段成绩。'
-          : 'Full activities within ±1% of each distance; not verified race PBs or splits.'}
+          ? '匹配标准距离附近（含合理超出）的完整活动；显示全程移动时间，并非精确分段或官方 PB。'
+          : 'Fastest full activities near or above each distance; moving time, not an exact split or official PB.'}
       </p>
 
       <div className="divide-y divide-[var(--color-border)]">

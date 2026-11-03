@@ -175,7 +175,7 @@ test('Summary day breakdown uses sport and moving minutes, not invented hours', 
   assert.equal(summary.summaryKey('2021-01-01', 'week'), '2020-W53');
 });
 
-test('matched full activities do not misrepresent 4.8 or 10.8 km as exact PRs', () => {
+test('distance-matched times come from actual complete runs, not short activities or indoor sessions', () => {
   const entries = [
     activity('2026-11-01', 'Run', 4800, '00:18:00'),
     activity('2026-11-02', 'Run', 5020, '00:28:00'),
@@ -185,7 +185,39 @@ test('matched full activities do not misrepresent 4.8 or 10.8 km as exact PRs', 
   ];
   const matched = bests.matchedFullRuns(entries);
   assert.equal(matched[0].activity.distance, 5020);
-  assert.equal(matched[1].activity.distance, 10060);
+  assert.equal(matched[1].activity.distance, 10800);
+  assert.equal(matched[1].seconds, 2400);
   assert.equal(matched[2].activity, null);
   assert.equal(matched[3].activity, null);
+});
+
+test('GPS overruns must not exclude faster near-standard 10K and half-marathon runs', () => {
+  const entries = [
+    activity('2026-01-01', 'Run', 10240, '00:41:20'),
+    activity('2026-01-02', 'Run', 10020, '00:47:30'),
+    activity('2026-01-03', 'Run', 21370, '01:32:00'),
+    activity('2026-01-04', 'Run', 21120, '01:38:00'),
+  ];
+  const matched = bests.matchedFullRuns(entries);
+  assert.equal(matched[1].activity, entries[0]);
+  assert.equal(matched[1].seconds, 2480);
+  assert.equal(matched[2].activity, entries[2]);
+  assert.equal(matched[2].seconds, 5520);
+});
+
+test('distance bands reject substantially short, long, and implausibly paced runs', () => {
+  const entries = [
+    activity('2026-01-01', 'Run', 9500, '00:37:00'),
+    activity('2026-01-02', 'Run', 11100, '00:38:00'),
+    activity('2026-01-03', 'Run', 10040, '00:24:00'),
+    activity('2026-01-04', 'Run', 10000, '01:30:00'),
+    activity('2026-01-05', 'Ride', 10030, '00:26:00'),
+    activity('2026-01-06', 'Run', 10020, '00:46:00'),
+    activity('2026-01-07', 'Run', 20700, '01:35:00'),
+    activity('2026-01-08', 'Run', 22800, '01:30:00'),
+    activity('2026-01-09', 'Run', 21180, '01:43:00'),
+  ];
+  const matched = bests.matchedFullRuns(entries);
+  assert.equal(matched[1].activity, entries[5]);
+  assert.equal(matched[2].activity, entries[8]);
 });
