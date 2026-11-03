@@ -68,6 +68,33 @@ def test_missing_policy_is_aggregate_only(monkeypatch):
     validate_public_activities(public)
 
 
+def test_workflow_delay_override_preserves_private_policy(monkeypatch, tmp_path):
+    path = tmp_path / "privacy.json"
+    path.write_text(json.dumps(ROUTES), encoding="utf-8")
+    monkeypatch.setenv("RUNNING_PRIVACY_CONFIG", str(path))
+    monkeypatch.setenv("RUNNING_PRIVACY_DELAY_HOURS", "24")
+    policy = load_policy()
+    assert policy["mode"] == "routes"
+    assert policy["zones"] == ROUTES["zones"]
+    assert policy["delay_hours"] == 24
+    # At UTC midnight on Nov 10, the 24 h hold plus the extra 24 h date
+    # margin includes the 8th but not the 9th.
+    activities = [
+        example_activity(date="2026-11-08 20:00:00"),
+        example_activity(date="2026-11-09 08:00:00"),
+    ]
+    exported = export_public_activities(activities, now=NOW)
+    assert [x["start_date_local"] for x in exported] == ["2026-11-08"]
+
+
+@pytest.mark.parametrize("value", ["-1", "24.0", "today", "", "721"])
+def test_invalid_workflow_delay_is_rejected(monkeypatch, value):
+    monkeypatch.delenv("RUNNING_PRIVACY_CONFIG", raising=False)
+    monkeypatch.setenv("RUNNING_PRIVACY_DELAY_HOURS", value)
+    with pytest.raises(ValueError, match="delay_hours|RUNNING_PRIVACY_DELAY_HOURS"):
+        load_policy()
+
+
 def test_unknown_sport_metadata_cannot_be_used_as_private_text():
     source = example_activity()
     source["type"] = "Run from personal residence"

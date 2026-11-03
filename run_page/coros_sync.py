@@ -2,8 +2,9 @@ import argparse
 import asyncio
 import hashlib
 import os
+import tempfile
 import time
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
 import aiofiles
 import httpx
@@ -163,33 +164,39 @@ class Coros:
             f"{self.base_url}/activity/detail/download?labelId={label_id}&sportType={sport_type}"
             f"&fileType={COROS_TYPE_DICT[file_type]}"
         )
-        file_url = None
-        fname = ""
-        file_path = ""
+        response = await self.req.post(download_url)
+        response.raise_for_status()
+        file_url = (response.json().get("data") or {}).get("fileUrl")
+        if not file_url:
+            print(f"No file URL found for label_id {label_id}")
+            return None, None
+
+        # Use the stable COROS activity ID rather than a signed URL's
+        # basename (which can vary and may contain sensitive query data).
+        fname = f"{int(label_id)}.{file_type}"
+        file_path = os.path.join(download_folder, fname)
+        # Keep an existing cached FIT intact if a refresh is interrupted.
+        fd, pending_path = tempfile.mkstemp(
+            dir=download_folder, prefix=f".{fname}.", suffix=".part"
+        )
+        os.close(fd)
         try:
-            response = await self.req.post(download_url)
-            response.raise_for_status()
-            resp_json = response.json()
-            file_url = resp_json.get("data", {}).get("fileUrl")
-            if not file_url:
-                print(f"No file URL found for label_id {label_id}")
-                return None, None
-
-            # Use the stable COROS activity ID rather than a signed URL's
-            # basename (which can vary and may contain sensitive query data).
-            fname = f"{int(label_id)}.{file_type}"
-            file_path = os.path.join(download_folder, fname)
-
             async with self.req.stream("GET", file_url) as response:
                 response.raise_for_status()
-                async with aiofiles.open(file_path, "wb") as f:
+                async with aiofiles.open(pending_path, "wb") as f:
                     async for chunk in response.aiter_bytes():
                         await f.write(chunk)
-            return label_id, fname
-        except Exception:
-            if file_path and os.path.exists(file_path):
-                os.remove(file_path)
-            raise
+            if os.path.getsize(pending_path) == 0:
+                raise ValueError("COROS returned an empty activity file")
+            if file_type == "fit":
+                with open(pending_path, "rb") as f:
+                    if f.read(12)[8:12] != b".FIT":
+                        raise ValueError("COROS returned an invalid FIT header")
+            os.replace(pending_path, file_path)
+        finally:
+            if os.path.exists(pending_path):
+                os.remove(pending_path)
+        return label_id, fname
 
 
 def activity_date(activity):
@@ -210,10 +217,34 @@ def activity_date(activity):
 
 
 def get_downloaded_ids(folder):
-    return {os.path.splitext(i)[0] for i in os.listdir(folder) if not i.startswith(".")}
+    return {
+        os.path.splitext(i)[0]
+        for i in os.listdir(folder)
+        if not i.startswith(".")
+        and os.path.isfile(os.path.join(folder, i))
+        and os.path.getsize(os.path.join(folder, i)) > 0
+    }
 
 
-async def download_and_generate(account, password, only_run, file_type, since=None):
+def select_download_ids(activities, downloaded_ids, *, today, refresh_recent_days):
+    """Fetch missing activities and re-check cached recent ones on every run."""
+    if not 0 <= refresh_recent_days <= 30:
+        raise ValueError("refresh_recent_days must be between 0 and 30")
+    missing = set(activities) - downloaded_ids
+    if refresh_recent_days == 0:
+        return sorted(missing), 0
+    earliest = today - timedelta(days=refresh_recent_days - 1)
+    refresh = {
+        activity_id
+        for activity_id, activity in activities.items()
+        if activity_id in downloaded_ids and activity_date(activity) >= earliest
+    }
+    return sorted(missing | refresh), len(refresh)
+
+
+async def download_and_generate(
+    account, password, only_run, file_type, since=None, refresh_recent_days=7
+):
     folder = FOLDER_DICT[file_type]
     downloaded_ids = get_downloaded_ids(folder)
     coros = Coros(account, password)
@@ -226,14 +257,23 @@ async def download_and_generate(account, password, only_run, file_type, since=No
                 for activity in activity_infos
                 if activity_date(activity) >= since
             ]
+        activity_by_id = {
+            str(activity["labelId"]): activity for activity in activity_infos
+        }
         activity_id_type_dict = {
-            str(activity["labelId"]): activity["sportType"]
-            for activity in activity_infos
+            activity_id: activity["sportType"]
+            for activity_id, activity in activity_by_id.items()
         }
         print("activity_ids: ", len(activity_id_type_dict))
         print("downloaded_ids: ", len(downloaded_ids))
-        to_generate_coros_ids = sorted(activity_id_type_dict.keys() - downloaded_ids)
-        print("to_generate_activity_ids: ", len(to_generate_coros_ids))
+        to_download_ids, refreshed_count = select_download_ids(
+            activity_by_id,
+            downloaded_ids,
+            today=datetime.now(UTC).date(),
+            refresh_recent_days=refresh_recent_days,
+        )
+        print("to_download_activity_ids: ", len(to_download_ids))
+        print("refresh_recent_cached_ids: ", refreshed_count)
 
         start_time = time.time()
         results = await gather_with_concurrency(
@@ -242,7 +282,7 @@ async def download_and_generate(account, password, only_run, file_type, since=No
                 coros.download_activity(
                     label_id, activity_id_type_dict[label_id], file_type
                 )
-                for label_id in to_generate_coros_ids
+                for label_id in to_download_ids
             ],
         )
         print(f"Download finished. Elapsed {time.time() - start_time} seconds")
@@ -253,8 +293,9 @@ async def download_and_generate(account, password, only_run, file_type, since=No
         print(
             f"COROS exports unavailable for {skipped} activities (unsupported mode/format)"
         )
-    if to_generate_coros_ids and skipped == len(to_generate_coros_ids):
+    if to_download_ids and skipped == len(to_download_ids):
         raise RuntimeError("COROS returned no usable exports for new activities")
+    downloaded_files = {name for _, name in results if name}
     local_dates = (
         {
             str(activity["labelId"]): activity_date(activity)
@@ -265,7 +306,12 @@ async def download_and_generate(account, password, only_run, file_type, since=No
         else None
     )
     make_activities_file(
-        SQL_FILE, folder, JSON_FILE, file_type, activity_local_dates=local_dates
+        SQL_FILE,
+        folder,
+        JSON_FILE,
+        file_type,
+        activity_local_dates=local_dates,
+        refresh_file_names=downloaded_files,
     )
 
 
@@ -293,6 +339,12 @@ if __name__ == "__main__":
         type=date.fromisoformat,
         metavar="YYYY-MM-DD",
         help="only import activities on/after this date (preserve prior sources)",
+    )
+    parser.add_argument(
+        "--refresh-recent-days",
+        type=int,
+        default=7,
+        help="re-download cached COROS activities from the last N calendar days (0–30)",
     )
 
     parser.add_argument(
@@ -331,6 +383,11 @@ if __name__ == "__main__":
 
     asyncio.run(
         download_and_generate(
-            account, encrypted_pwd, is_only_running, file_type, options.since
+            account,
+            encrypted_pwd,
+            is_only_running,
+            file_type,
+            options.since,
+            options.refresh_recent_days,
         )
     )

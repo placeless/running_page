@@ -87,6 +87,24 @@ def test_provider_calendar_date_overrides_timezone_fallback(monkeypatch, tmp_pat
         assert result[0]["type"] == "WeightTraining"
         assert result[0]["start_date_local"].startswith("2026-10-19")
         assert result[0]["start_date"].startswith("2026-10-18")
+        updated = Track()
+        updated._load_fit_data({"session_mesgs": [session], "record_mesgs": []})
+        updated.file_names = ["example.fit"]
+        monkeypatch.setattr(
+            generator.track_loader.TrackLoader,
+            "load_tracks",
+            lambda *_args, **_kwargs: [updated],
+        )
+        app.sync_from_data_dir(
+            str(tmp_path),
+            file_suffix="fit",
+            activity_local_dates={"example": dt.date(2026, 10, 20)},
+            refresh_file_names={"example.fit"},
+        )
+        refreshed = app.load()
+        assert len(refreshed) == 1
+        assert refreshed[0]["start_date_local"].startswith("2026-10-20")
+        assert refreshed[0]["start_date"].startswith("2026-10-18")
     finally:
         app.session.close()
         app.session.bind.dispose()
@@ -113,7 +131,9 @@ def test_fit_loader_includes_only_valid_distance_free_training(monkeypatch):
         track("Run", 5000, 1600),
     ]
     monkeypatch.setattr(
-        loader, "_list_data_files", lambda _path, _suffix: iter(["one.fit"])
+        loader,
+        "_list_data_files",
+        lambda _path, _suffix, **_kwargs: iter(["one.fit"]),
     )
     monkeypatch.setattr(
         loader,

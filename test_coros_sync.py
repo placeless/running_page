@@ -3,7 +3,7 @@
 import asyncio
 import json
 import sys
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import httpx
@@ -120,6 +120,163 @@ def test_coros_cutover_keeps_existing_archive_and_skips_old_downloads(
         "new-cached": date(2026, 7, 1),
         "new": date(2026, 7, 2),
     }
+    assert generated[0][1]["refresh_file_names"] == {"new.fit"}
+
+
+def test_recent_activity_selection_checks_cached_fits_each_run():
+    activities = {
+        "old": {"date": 20261015},
+        "recent": {"date": 20261101},
+        "today": {"date": 20261103},
+        "missing": {"date": 20260701},
+    }
+    cached = {"old", "recent", "today"}
+    selected, refreshed = coros_sync.select_download_ids(
+        activities, cached, today=date(2026, 11, 3), refresh_recent_days=7
+    )
+    assert selected == ["missing", "recent", "today"]
+    assert refreshed == 2
+    selected, refreshed = coros_sync.select_download_ids(
+        activities, cached, today=date(2026, 11, 3), refresh_recent_days=0
+    )
+    assert selected == ["missing"]
+    assert refreshed == 0
+
+
+def test_coros_run_refreshes_existing_latest_fit(monkeypatch, tmp_path):
+    fit_dir = tmp_path / "FIT_OUT"
+    fit_dir.mkdir()
+    (fit_dir / "42.fit").write_bytes(b"already downloaded")
+    today = datetime.now(UTC).date()
+    calls = []
+
+    class FakeCoros:
+        def __init__(self, _account, _password):
+            self.req = self
+
+        async def init(self):
+            pass
+
+        async def fetch_activity_ids_types(self, only_run):
+            return [
+                {
+                    "labelId": "42",
+                    "sportType": 100,
+                    "date": int(today.strftime("%Y%m%d")),
+                }
+            ]
+
+        async def download_activity(self, label_id, sport_type, file_type):
+            calls.append(label_id)
+            return label_id, "42.fit"
+
+        async def aclose(self):
+            pass
+
+    published = []
+    monkeypatch.setattr(coros_sync, "Coros", FakeCoros)
+    monkeypatch.setattr(coros_sync, "FOLDER_DICT", {"fit": str(fit_dir)})
+    monkeypatch.setattr(
+        coros_sync,
+        "make_activities_file",
+        lambda *args, **kwargs: published.append(kwargs),
+    )
+    asyncio.run(
+        coros_sync.download_and_generate(
+            "account",
+            "password",
+            False,
+            "fit",
+            date(2026, 6, 30),
+            refresh_recent_days=7,
+        )
+    )
+    assert calls == ["42"]
+    assert published[0]["refresh_file_names"] == {"42.fit"}
+    assert published[0]["activity_local_dates"] == {"42": today}
+
+
+def test_invalid_refresh_window_fails_before_download():
+    with pytest.raises(ValueError, match="refresh_recent_days"):
+        coros_sync.select_download_ids(
+            {}, set(), today=date(2026, 11, 3), refresh_recent_days=31
+        )
+
+
+def test_refresh_file_names_bypass_import_manifest(monkeypatch, tmp_path):
+    from gpxtrackposter import track_loader
+
+    fit_dir = tmp_path / "FIT_OUT"
+    fit_dir.mkdir()
+    for name in ("recent.fit", "old.fit", "new.fit"):
+        (fit_dir / name).write_bytes(b"fit data")
+    monkeypatch.setattr(
+        track_loader, "load_synced_file_list", lambda: ["recent.fit", "old.fit"]
+    )
+    paths = list(
+        track_loader.TrackLoader._list_data_files(
+            str(fit_dir), "fit", refresh_file_names={"recent.fit"}
+        )
+    )
+    assert {Path(path).name for path in paths} == {"recent.fit", "new.fit"}
+
+
+def test_import_manifest_deduplicates_refreshed_fits(monkeypatch, tmp_path):
+    import synced_data_file_logger
+
+    manifest = tmp_path / "imported.json"
+    monkeypatch.setattr(synced_data_file_logger, "SYNCED_FILE", str(manifest))
+    recent = ["recent.fit"]
+    synced_data_file_logger.save_synced_data_file_list(recent)
+    synced_data_file_logger.save_synced_data_file_list(recent)
+    assert recent == ["recent.fit"]
+    assert json.loads(manifest.read_text()) == ["recent.fit"]
+
+
+@pytest.mark.parametrize(
+    ("download_status", "download_body", "expected_error"),
+    [
+        (200, b"\x0e\x10\x00\x00\x00\x00\x00\x00.FITupdated", None),
+        (200, b"invalid-fit-body", ValueError),
+        (503, b"unavailable", httpx.HTTPStatusError),
+    ],
+)
+def test_coros_refresh_preserves_cached_fit_on_error(
+    monkeypatch, tmp_path, download_status, download_body, expected_error
+):
+    fit_dir = tmp_path / "FIT_OUT"
+    fit_dir.mkdir()
+    old_file = fit_dir / "123.fit"
+    old_file.write_bytes(b"old-fit")
+
+    def handler(request):
+        if request.method == "POST":
+            return httpx.Response(
+                200, json={"data": {"fileUrl": "https://example.com/latest.fit"}}
+            )
+        return httpx.Response(download_status, content=download_body)
+
+    monkeypatch.setattr(coros_sync, "FOLDER_DICT", {"fit": str(fit_dir)})
+
+    async def exercise():
+        coros = coros_sync.Coros("account", "password")
+        coros.base_url = "https://teamapi.coros.com"
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            coros.req = client
+            if expected_error is not None:
+                with pytest.raises(expected_error):
+                    await coros.download_activity(123, 100, "fit")
+            else:
+                assert await coros.download_activity(123, 100, "fit") == (
+                    123,
+                    "123.fit",
+                )
+
+    asyncio.run(exercise())
+    assert old_file.read_bytes() == (
+        download_body if expected_error is None else b"old-fit"
+    )
+    assert sorted(p.name for p in fit_dir.iterdir()) == ["123.fit"]
 
 
 def test_coros_api_error_does_not_pass_as_empty_sync():

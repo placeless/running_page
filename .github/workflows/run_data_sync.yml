@@ -33,6 +33,8 @@ env:
   # please change to your own config.
   RUN_TYPE: coros # COROS Training Hub; no Strava API subscription needed.
   COROS_SYNC_SINCE: '2026-06-30' # Preserve the Strava archive through 2026-06-29 without cross-provider duplicates.
+  RUNNING_PRIVACY_DELAY_HOURS: '24' # Effective date cutoff also includes a conservative extra 24 hours.
+  COROS_REFRESH_RECENT_DAYS: '7' # Re-fetch the latest COROS FIT files on every sync, even if cached.
   RUNNING_FIT_TIMEZONE: Europe/Madrid # Explicit clock fallback for COROS workouts without GPS; API local date takes priority.
   ATHLETE: placeless
   TITLE: Placeless Running
@@ -190,7 +192,7 @@ jobs:
           COROS_ACCOUNT: ${{ secrets.COROS_ACCOUNT }}
           COROS_PASSWORD: ${{ secrets.COROS_PASSWORD }}
         run: |
-          python run_page/coros_sync.py --since "$COROS_SYNC_SINCE"
+          python run_page/coros_sync.py --since "$COROS_SYNC_SINCE" --refresh-recent-days "$COROS_REFRESH_RECENT_DAYS"
         # If you only want to sync 'type running' add args --only-run, default script is to sync all data (rides , swims, strengths trains, hikes, runs, etc.).
         # python run_page/coros_sync.py ${{ secrets.COROS_ACCOUNT }} ${{ secrets.COROS_PASSWORD }} --only-run
 

@@ -31,6 +31,12 @@ uses an allowlist: date without time, generic activity name, no provider ID or
 raw address, optional redacted route segments, and existing activity metrics.
 The exporter postpones publication by `delay_hours` (default 72); it also
 accounts conservatively for unknown source timezone when using local dates.
+This fork's GitHub Actions workflow now sets
+`RUNNING_PRIVACY_DELAY_HOURS=24`. The environment override changes **only**
+the delay; it retains the private Secret's route mode, protected zones and
+endpoint trimming. The exporter adds a 24-hour date safety margin, making
+the effective cutoff a **48-hour UTC offset** at this setting. A new day
+becomes public only after the next successful scheduled sync.
 
 **Missing private policy means aggregate-only output, with no GPS.** Enabling
 GPS requires an explicit private file with one or more protection circles.

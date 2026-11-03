@@ -8,9 +8,9 @@ def save_synced_data_file_list(file_list: list):
     old_list = load_synced_file_list()
 
     with open(SYNCED_FILE, "w") as f:
-        file_list.extend(old_list)
-
-        json.dump(file_list, f)
+        # Refreshing the latest FIT files must not grow this manifest on
+        # every scheduled run, nor mutate the caller's list.
+        json.dump(list(dict.fromkeys([*old_list, *file_list])), f)
 
 
 def load_synced_file_list():

@@ -56,6 +56,7 @@ def make_activities_file(
     file_suffix="gpx",
     activity_title_dict=None,
     activity_local_dates=None,
+    refresh_file_names=None,
 ):
     generator = Generator(sql_file)
     generator.sync_from_data_dir(
@@ -63,6 +64,7 @@ def make_activities_file(
         file_suffix=file_suffix,
         activity_title_dict=activity_title_dict,
         activity_local_dates=activity_local_dates,
+        refresh_file_names=refresh_file_names,
     )
     write_public_json(json_file, generator.load())
 

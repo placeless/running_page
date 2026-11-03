@@ -88,10 +88,14 @@ class Generator:
         file_suffix="gpx",
         activity_title_dict=None,
         activity_local_dates=None,
+        refresh_file_names=None,
     ):
         loader = track_loader.TrackLoader()
         tracks = loader.load_tracks(
-            data_dir, file_suffix=file_suffix, activity_title_dict=activity_title_dict
+            data_dir,
+            file_suffix=file_suffix,
+            activity_title_dict=activity_title_dict,
+            refresh_file_names=refresh_file_names,
         )
         print(f"load {len(tracks)} tracks")
         if not tracks:

@@ -121,3 +121,24 @@ imported sessions, day/type counts matched the isolated Europe/Madrid
 replay exactly. The two October 31 and November 2 runs remain private under
 the calendar-date publication delay; November 1 had no activity in either
 the COROS FIT archive or the SQLite records.
+
+## Publication delay and rolling COROS refresh (current policy)
+
+The GitHub Actions workflow sets `RUNNING_PRIVACY_DELAY_HOURS=24`, overriding
+only the publication delay in the private policy. Protected route zones,
+privacy mode, and endpoint trimming are unchanged. The calendar-date
+cutoff is `(now_utc - timedelta(hours=delay_hours + 24)).date()`,
+which means a **48-hour cutoff offset** rather than exact per-activity
+release timing. A successful scheduled sync and Vercel deployment must
+still occur before the latest eligible date appears on the website.
+
+The workflow sets `COROS_REFRESH_RECENT_DAYS=7`. Every sync queries the
+full COROS activity index since the provider cutover, downloads newly
+discovered activities and **refreshes already-cached FIT files from the
+latest seven calendar dates**. Replacements are atomic: a failed download
+does not destroy a cached original. The importer explicitly re-processes
+successfully refreshed files and updates existing activity records by
+their stable timestamp-derived IDs, including corrected local dates.
+The imported-file manifest is deduplicated, and older unchanged FITs
+remain cached. The `2026-06-30` cutover remains in place to avoid
+cross-provider duplicate records.

@@ -175,8 +175,17 @@ def load_policy(path=None):
     """Missing policy permits only aggregate output. Never infer sensitive zones."""
     path = path or os.getenv("RUNNING_PRIVACY_CONFIG")
     if not path:
-        return _validated_policy({"version": 1, "mode": "aggregate"})
-    return _validated_policy(json.loads(Path(path).read_text(encoding="utf-8")))
+        policy = _validated_policy({"version": 1, "mode": "aggregate"})
+    else:
+        policy = _validated_policy(json.loads(Path(path).read_text(encoding="utf-8")))
+    # The public sync can shorten its publication hold without replacing the
+    # private policy (which may contain protected route zones).
+    override = os.getenv("RUNNING_PRIVACY_DELAY_HOURS")
+    if override is not None:
+        if not override.isascii() or not override.isdecimal():
+            raise ValueError("RUNNING_PRIVACY_DELAY_HOURS must be an integer 0–720")
+        policy = _validated_policy({**policy, "delay_hours": int(override)})
+    return policy
 
 
 def redact_route(encoded, policy):
