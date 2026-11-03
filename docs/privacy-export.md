@@ -19,8 +19,10 @@ During the November 2026 cutover, the original database, FIT files, import
 manifest, historical public JSON and 31 generated SVGs were backed up in
 `placeless/running-data-private` (private). The public Git index was then
 cleared of the originals and 29 personally generated SVGs; only generic
-`assets/start.svg` and `assets/end.svg` remain. Historical Git commits still
-contain the originals until a separate history cleanup.
+`assets/start.svg` and `assets/end.svg` remain. The Fork's public
+`master` history was rewritten on 2026-11-03 to remove historical
+personal GPS objects; cached GitHub SHA links remain subject to
+GitHub Support's separate removal process.
 
 The Python exporter `run_page/privacy_export.py` is the only supported route
 from the private database to public activity JSON. The COROS and Strava sync
@@ -99,10 +101,11 @@ See [data-integrity reconciliation](data-integrity.md) for the audited
 
 ## Move the raw database to a durable private GitHub repository
 
-The public repository still has legacy raw FIT and SQLite files in its
-**history**. The new private archive and an independent verification clone have
-been checked against the original files. Do not rewrite public Git history
-without separately assessing the consequences of a force push.
+The public repository historically carried raw FIT and SQLite files.
+The private archive and an independent verification clone were checked
+before an explicitly approved, `--force-with-lease`-guarded cleanup of the
+Fork's public `master` on 2026-11-03. Old SHA URLs may remain cached on
+GitHub; see the separate support action below.
 
 The new automated workflow requires a **new, non-forked private** repository
 containing `data.db`, `FIT_OUT/` and any existing `GPX_OUT/`, `TCX_OUT/`,
@@ -125,13 +128,12 @@ publication step stages only `src/static/activities.json`, never uses
 `git add .`, and backs up new raw FIT/SQLite data to the private repository
 before committing the sanitized public JSON.
 
-This migration does **not** delete historical Git objects, fork copies,
-published Vercel deployments, downloaded archives or caches. History
-rewriting and deployment purge are a later, explicitly reviewed operation.
-Data that has already been distributed cannot be reliably recalled.
-For the verified 2026-11-02 exposure inventory, boundaries between shared
-upstream history and fork-specific data, and a non-destructive cleanup plan,
-see [Git history remediation](history-remediation.md).
+The Fork `master` rewrite and deletion of nine unsafe retained Vercel
+deployments were completed separately on 2026-11-03. Neither operation
+automatically deletes GitHub cached commit URLs, old clones, locally saved
+archives, or files already downloaded by third parties. Data distributed
+earlier cannot reliably be recalled. See [Git history remediation and
+remaining GitHub Support work](history-remediation.md).
 
 ## Limits and verification
 

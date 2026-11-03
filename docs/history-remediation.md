@@ -1,19 +1,60 @@
-# Public Git history: privacy-remediation plan
+# Public Git history: privacy-remediation record
 
-**State: isolated history-cleanup trial validated. Nine risky Vercel
-deployments deleted on 2026-11-03 with approval. Git history unchanged.**
+**State: GitHub Fork `master` rewritten on 2026-11-03 with explicit approval;
+nine risky Vercel deployments removed earlier. GitHub's old-commit cached
+views still require Support review.**
 This is specific to `placeless/running_page`, not to the independent
 `placeless.net/running/` application or the upstream repository.
 
 ## Verified inventory (2026-11-02)
 
-The current public Git index contains no tracked FIT/GPX/TCX, database, import
-manifest or personalized generated SVG. `src/static/activities.json` currently
-contains 909 records with no route geometry (`route_segments` all empty and
-`summary_polyline` all null). A local build audit also identified 29 ignored
+The public Git index contains no tracked FIT/GPX/TCX, database, import
+manifest or personalized generated SVG. At the beginning of this audit,
+`src/static/activities.json` contained 909 records with no route geometry.
+The corrected November 3 publication contains **934**, still with no route
+geometry. A local build audit also identified 29 ignored
 generated SVGs that Vite's legacy glob imported into `dist/`; they were moved
 into a local ignored `private/` folder, and the build guard was hardened to
-reject reappearance. This does **not** clear historical commits or old deploys.
+reject reappearance. Historical Vercel deploys and the Fork's `master`
+history were subsequently remediated as detailed below.
+
+## Executed GitHub migration (2026-11-03)
+
+After backing up the private archive and making an ignored **640 MiB**
+offline Git bundle, the reviewed snapshot was restored to a fresh isolated
+clone using a single fork-range `git-filter-repo` pass. The immutable shared
+upstream merge-base `3bec7208` was preserved.
+
+| Evidence | Result |
+| --- | --- |
+| Old `placeless/running_page` HEAD | `77244ec0` |
+| Rewritten `master` pushed to **origin only** | `b32ef746` |
+| Approved paths, mode and byte comparison | **217**, no differences |
+| Original fork-range candidate-sensitive objects | 3,424 |
+| Old candidate-sensitive objects reachable from the new `master`, excluding approved current public blobs | **0** |
+| Privacy-checked public activities | **934**; zero route geometry |
+| Python tests / TypeScript / Vite / ESLint | **56 passed** / pass / pass / pass |
+| Remote branches / PRs / direct child forks | 1 / 0 / 0 |
+| Push safety | Explicit `--force-with-lease` against the old SHA; upstream untouched |
+
+The working checkout was reset to the new `origin/master` **after preserving
+its previous local edits**. Existing legacy local branches and old clones
+must not be merged into the cleaned branch: they can reintroduce confidential
+objects. The offline bundle is retained only under Git-ignored `private/`
+for emergency recovery and must **never** be uploaded to any public repo.
+
+**Remaining server-side exposure:** after the rewrite, GitHub's Commit API
+still resolved a sampled former Fork commit whose historical source
+included private route geometry. Its SHA is intentionally **not documented
+in this public repository** to avoid directing readers to sensitive data.
+This is expected for cached views on GitHub:
+a branch update by itself does not purge all SHA-addressable objects.
+The repository owner must ask [GitHub Support](https://support.github.com/)
+to evaluate cached-view removal and server-side garbage collection under
+GitHub's [sensitive-data procedure](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/removing-sensitive-data-from-a-repository).
+There are **zero affected pull requests** and **zero direct child forks** by
+the current repository API audit. Do not include raw coordinates, credentials,
+or private files in the support request. Support assistance is discretionary.
 
 | Read-only finding | Result |
 | --- | ---: |
@@ -49,7 +90,7 @@ and commit messages; path extension matching alone is insufficient.
 
 ## Isolated partial-rewrite trial (2026-11-02)
 
-### Current candidate: one filter pass, exact snapshot restoration
+### Successful one-pass trial (basis for migration)
 
 Following the second-pass regression documented below, a **fresh**
 non-hardlinked clone was created with only `master` and **no remote**. One
@@ -91,9 +132,9 @@ not exhaustive credential or geographic-content verification**: private GPS
 binary and historical activity JSON files were intentionally excluded from
 the text scan and instead removed by the path/object-reachability filter.
 
-This candidate supersedes the earlier two-pass experiment. It remains a
-**local experiment only**, not a push-ready public branch. Snapshot contents
-must be revalidated if any working-tree files change.
+This trial superseded the earlier two-pass experiment. Its final migration
+successor was revalidated against the 217-file approved snapshot, then pushed
+to the Fork's own `master` after a separate authorization.
 
 ### Earlier exploratory trial (superseded)
 
@@ -230,10 +271,11 @@ all embedded historical credentials or coordinates have been inspected.
   rewrite, including evaluating Support assistance. GitHub does not
   promise such help for data that it does not classify as sensitive.
 
-The Vercel cleanup completed on 2026-11-03. GitHub history migration remains
-an independent, unapproved operation. Historical embedded-content verification
-is still incomplete; GitHub-cached commits and downloaded third-party copies
-have not been purged by deleting Vercel deployments.
+The Vercel cleanup and Fork `master` migration completed on 2026-11-03,
+as separate explicitly approved operations. Full historical embedded-content
+verification remains bounded by the described scans. GitHub cached views,
+local legacy refs, and downloaded third-party copies have **not** been purged
+by rewriting the active branch.
 
 ## Source data reconciliation before the history rewrite (2026-11-03)
 
@@ -247,7 +289,7 @@ COROS-server reconciliation is not yet possible from archived data alone.
 The separate private SQLite/FIT archive must not be rewritten, deleted, or
 replaced by the reduced public export.
 
-## Review and execution sequence
+## Original execution checklist (completed where noted)
 
 1. **Freeze publication.** Temporarily suspend the scheduled public-sync
    workflow and Vercel auto-deploys *when execution is authorized*, and
@@ -287,7 +329,7 @@ replaced by the reduced public export.
    an explicit decision about whether to retain the GitHub fork relationship.
    Leaving a fork network is permanent and may lose repository metadata; it
    is **not** a routine cleanup step.
-6. **Only after separate authorization**, coordinate a guarded push to the
+6. **Completed after separate authorization:** coordinate a guarded push to the
    fork's `origin` (never `upstream`), verify the public refs, and prevent the
    older clones or sync workflow from reintroducing old objects. Resume sync
    only after the private archive and privacy-export guards pass.
@@ -302,16 +344,15 @@ replaced by the reduced public export.
    clones, forks and downloaded copies cannot be recalled by Git rewriting.
    Treat `placeless.net/running/` as a separate audit, not a deployment target.
 
-## Decision gate
+## Post-migration guardrails
 
-Do **not** run `git-filter-repo` on this working checkout, force-push a ref,
-detach the Fork, modify Cloudflare routing, or delete any of the three
-remaining safe Vercel deployments as part of this plan. Before a Git
-history migration, revalidate the
-single-pass tree against the latest approved public snapshot. Deleting the
-nine legacy Vercel deployments and rewriting the GitHub Fork history are
-**distinct authorization decisions**. Vercel deletion has been approved and
-completed; a GitHub history rewrite has not been authorized.
+Do **not** restore or merge the obsolete Fork history, attach private GPS
+archive paths to a public commit, publish the local backup bundle, detach
+the Fork, modify the independent Cloudflare Running application, or delete
+the remaining safe Vercel deployments as part of routine maintenance.
+Preserve the shared upstream merge-base for future clean upstream merges.
+Revalidate public data on every export and handle GitHub cached-object
+purging separately with GitHub Support.
 
 References:
 

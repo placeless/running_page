@@ -94,8 +94,10 @@ configure origin restrictions.
 tracked sensitive files; the archive is accessed through a repository-scoped
 SSH Deploy Key. See [privacy-first export](privacy-export.md). Until a private
 sensitive-zone policy is configured, only aggregate activity records are public.
-Historical Git data requires a separate review before any history rewrite;
-see [history remediation](history-remediation.md).
+Fork `master` history was cleaned on 2026-11-03; old local backup branches
+and clones must never be merged back into `master` because they may
+reintroduce private GPS data. GitHub cached-view cleanup still requires
+Support review; see [history remediation](history-remediation.md).
 
 The fork uses the upstream COROS Training Hub downloader, **not** the Strava
 API. `.github/workflows/run_data_sync.yml` selects `RUN_TYPE: coros`; its
