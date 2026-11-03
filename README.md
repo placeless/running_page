@@ -6,6 +6,11 @@
 > export, never raw FIT or SQLite data. Read [docs/privacy-export.md](docs/privacy-export.md)
 > **before running CI sync or deploying**. Previously committed raw records
 > are not protected by frontend map filters.
+>
+> **Fork security exception:** The historical GitHub Actions raw-data caching
+> guidance further down this upstream README is **not supported** by this fork.
+> Original activity files are backed up to a separate private archive; see
+> [docs/fork-maintenance.md](docs/fork-maintenance.md).
 
 ## Note
 

@@ -5,13 +5,12 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
-import pytest
 from garmin_fit_sdk.util import FIT_EPOCH_S
 
 sys.path.insert(0, str(Path(__file__).parent / "run_page"))
 
-from gpxtrackposter.track import Track  # noqa: E402
-from gpxtrackposter.track_loader import TrackLoader  # noqa: E402
+from gpxtrackposter.track import Track
+from gpxtrackposter.track_loader import TrackLoader
 
 
 def _session(sport="training", sub_sport="strength_training"):

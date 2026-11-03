@@ -263,6 +263,7 @@ def test_coros_refresh_preserves_cached_fit_on_error(
         coros.base_url = "https://teamapi.coros.com"
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             coros.req = client
+            coros.download_req = client
             if expected_error is not None:
                 with pytest.raises(expected_error):
                     await coros.download_activity(123, 100, "fit")
@@ -276,6 +277,184 @@ def test_coros_refresh_preserves_cached_fit_on_error(
     assert old_file.read_bytes() == (
         download_body if expected_error is None else b"old-fit"
     )
+    assert sorted(p.name for p in fit_dir.iterdir()) == ["123.fit"]
+
+
+def test_coros_download_never_forwards_api_credentials(monkeypatch, tmp_path):
+    fit_dir = tmp_path / "FIT_OUT"
+    fit_dir.mkdir()
+    observed = []
+    original_client = httpx.AsyncClient
+
+    def handler(request):
+        observed.append((request.url.host, request.url.path, dict(request.headers)))
+        if request.url.path == "/account/login":
+            return httpx.Response(200, json={"data": {"accessToken": "test-token"}})
+        if request.url.path == "/activity/query":
+            return httpx.Response(200, json={"result": 0, "data": {"count": 0}})
+        if request.url.path == "/activity/detail/download":
+            return httpx.Response(
+                200, json={"data": {"fileUrl": "https://files.example.com/a.fit"}}
+            )
+        return httpx.Response(200, content=b"\x0e\x10\x00\x00\x00\x00\x00\x00.FITsafe")
+
+    transport = httpx.MockTransport(handler)
+    monkeypatch.setattr(coros_sync, "FOLDER_DICT", {"fit": str(fit_dir)})
+    monkeypatch.setattr(
+        coros_sync.httpx,
+        "AsyncClient",
+        lambda *args, **kwargs: original_client(*args, transport=transport, **kwargs),
+    )
+
+    async def exercise():
+        client = coros_sync.Coros("account", "hash")
+        await client.login()
+        try:
+            assert await client.download_activity(123, 100, "fit") == (123, "123.fit")
+        finally:
+            await client.req.aclose()
+            await client.download_req.aclose()
+
+    asyncio.run(exercise())
+    assert (fit_dir / "123.fit").is_file()
+    api_download = next(
+        headers
+        for host, path, headers in observed
+        if path == "/activity/detail/download"
+    )
+    signed_download = next(
+        headers for host, path, headers in observed if host == "files.example.com"
+    )
+    assert api_download["accesstoken"] == "test-token"
+    assert "CPL-coros-token=test-token" in api_download["cookie"]
+    assert "accesstoken" not in signed_download
+    assert "cookie" not in signed_download
+    assert "authorization" not in signed_download
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://files.example.com/a.fit",
+        "https://localhost/a.fit",
+        "https://127.0.0.1/a.fit",
+        "https://[::1]/a.fit",
+        "https://user:secret@files.example.com/a.fit",
+        "https://files.example.com:8080/a.fit",
+        "https://internal.local/a.fit",
+        "https://singlehost/a.fit",
+        "file:///tmp/a.fit",
+    ],
+)
+def test_coros_download_rejects_unsafe_file_urls(url):
+    with pytest.raises(ValueError, match="unsafe"):
+        coros_sync.validate_download_url(url)
+
+
+def test_coros_download_can_pin_exact_storage_hosts(monkeypatch):
+    monkeypatch.setenv("COROS_DOWNLOAD_ALLOWED_HOSTS", "files.example.com")
+    assert coros_sync.validate_download_url("https://files.example.com/a.fit")
+    with pytest.raises(ValueError, match="unsafe"):
+        coros_sync.validate_download_url("https://evil.files.example.com/a.fit")
+
+
+def test_coros_download_redirects_are_anonymous_and_validated(monkeypatch, tmp_path):
+    fit_dir = tmp_path / "FIT_OUT"
+    fit_dir.mkdir()
+    saved_file = fit_dir / "123.fit"
+    saved_file.write_bytes(b"existing")
+    requests = []
+    target = "https://files.example.com/a.fit"
+
+    def handler(request):
+        requests.append(request)
+        if request.method == "POST":
+            return httpx.Response(200, json={"data": {"fileUrl": target}})
+        return httpx.Response(302, headers={"location": "http://localhost/secret"})
+
+    monkeypatch.setattr(coros_sync, "FOLDER_DICT", {"fit": str(fit_dir)})
+
+    async def exercise():
+        coros = coros_sync.Coros("account", "password")
+        coros.base_url = "https://teamapi.coros.com"
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            coros.req = client
+            coros.download_req = client
+            with pytest.raises(ValueError, match="unsafe"):
+                await coros.download_activity(123, 100, "fit")
+
+    asyncio.run(exercise())
+    assert len(requests) == 2
+    assert saved_file.read_bytes() == b"existing"
+    assert sorted(p.name for p in fit_dir.iterdir()) == ["123.fit"]
+
+
+def test_coros_download_follows_safe_redirect_without_credentials(
+    monkeypatch, tmp_path
+):
+    fit_dir = tmp_path / "FIT_OUT"
+    fit_dir.mkdir()
+    observed = []
+
+    def handler(request):
+        observed.append((request.url.host, request.headers))
+        if request.method == "POST":
+            return httpx.Response(
+                200,
+                json={"data": {"fileUrl": "https://files.example.com/redirect"}},
+            )
+        if request.url.host == "files.example.com":
+            return httpx.Response(
+                302, headers={"location": "https://cdn.example.net/file.fit"}
+            )
+        return httpx.Response(200, content=b"\x0e\x10\x00\x00\x00\x00\x00\x00.FITsafe")
+
+    monkeypatch.setattr(coros_sync, "FOLDER_DICT", {"fit": str(fit_dir)})
+
+    async def exercise():
+        coros = coros_sync.Coros("account", "password")
+        coros.base_url = "https://teamapi.coros.com"
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            coros.req = client
+            coros.download_req = client
+            assert await coros.download_activity(123, 100, "fit") == (123, "123.fit")
+
+    asyncio.run(exercise())
+    assert len(observed) == 3
+    assert all(
+        "accesstoken" not in headers and "cookie" not in headers
+        for host, headers in observed
+        if host != "teamapi.coros.com"
+    )
+    assert (fit_dir / "123.fit").is_file()
+
+
+def test_coros_download_size_limit_preserves_original(monkeypatch, tmp_path):
+    fit_dir = tmp_path / "FIT_OUT"
+    fit_dir.mkdir()
+    original = fit_dir / "123.fit"
+    original.write_bytes(b"cached")
+    monkeypatch.setattr(coros_sync, "FOLDER_DICT", {"fit": str(fit_dir)})
+    monkeypatch.setattr(coros_sync, "MAX_DOWNLOAD_BYTES", 8)
+
+    def handler(request):
+        if request.method == "POST":
+            return httpx.Response(
+                200, json={"data": {"fileUrl": "https://files.example.com/a.fit"}}
+            )
+        return httpx.Response(200, content=b"an oversized synthetic test file")
+
+    async def exercise():
+        coros = coros_sync.Coros("account", "password")
+        coros.base_url = "https://teamapi.coros.com"
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            coros.req = client
+            coros.download_req = client
+            with pytest.raises(ValueError, match="download limit"):
+                await coros.download_activity(123, 100, "fit")
+
+    asyncio.run(exercise())
+    assert original.read_bytes() == b"cached"
     assert sorted(p.name for p in fit_dir.iterdir()) == ["123.fit"]
 
 

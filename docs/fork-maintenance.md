@@ -107,6 +107,22 @@ Vercel-hosted frontend consumes after its existing Git deployment rebuild.
 No Cloudflare Worker, D1 database, Strava subscription or Strava OAuth token is
 needed to perform this sync.
 
+The sync workflow is serialized across scheduled and manual runs to avoid
+concurrent writes to the private archive and public branch. Original FIT/GPX/
+SQLite data is never saved to GitHub Actions Cache; the optional GitHub Pages
+workflow caches only its package-manager dependencies. The generic upstream
+README's raw-data cache toggle does not apply to this fork.
+
+The COROS API client is authenticated, but signed FIT files are retrieved by
+a **separate, anonymous HTTPS client**. File URLs and redirects must pass
+public-host checks, and file downloads are size-limited. Storage hosts can vary
+by COROS region and provider, so the downloader does not assume a fixed
+domain. To require an exact-domain allowlist after verifying the observed
+signed URL's host, add a repository Actions **variable**
+`COROS_DOWNLOAD_ALLOWED_HOSTS` containing comma-separated hostnames (or
+set the environment variable locally). Do not set it to an unverified hostname
+or commit signed URLs to the public repository.
+
 ### One-time setup (GitHub)
 
 In the **placeless/running_page** repository, go to **Settings → Secrets and

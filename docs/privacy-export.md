@@ -101,10 +101,9 @@ for the before/after counts, timezone handling, and privacy cutoff.
    pnpm build
    ```
 
-   Until this is done, the **normal production build deliberately fails** on
-   the older, unsafe activity JSON. `RUNNING_ALLOW_UNSAFE_LOCAL_PREVIEW=1 pnpm
-build` is available strictly for local debugging. Never configure that
-   bypass on Vercel, Cloudflare, CI or a public deployment.
+   Until this is done, **every production build fails** on older, unsafe
+   activity JSON. There is no environment-variable bypass; use a separate
+   local development preview and privacy-safe synthetic fixtures instead.
 
 ## Move the raw database to a durable private GitHub repository
 

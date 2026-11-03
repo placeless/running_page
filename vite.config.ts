@@ -29,9 +29,9 @@ export default defineConfig({
       buildStart() {
         // Never bundle ignored, locally generated personal SVGs.
         checkPublicRepository();
-        if (process.env.RUNNING_ALLOW_UNSAFE_LOCAL_PREVIEW !== '1') {
-          validatePublicData();
-        }
+        // This runs for every production build, including local builds.
+        // A debug environment variable must never weaken the publish gate.
+        validatePublicData();
       },
     },
     react(),

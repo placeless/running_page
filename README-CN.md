@@ -1,3 +1,8 @@
+> **此 Fork 的安全规则：** 以下上游文档中的 GitHub Actions 原始数据缓存方案
+> 不适用于本 Fork。FIT、GPX、SQLite 只能进入独立私有归档；
+> 详情见 [Fork 维护文档](docs/fork-maintenance.md) 与
+> [隐私导出文档](docs/privacy-export.md)。
+
 ## Note
 
 1. clone or Fork before vercel 404 need to pull the latest code

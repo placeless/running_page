@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import hashlib
+import ipaddress
 import os
 import tempfile
 import time
@@ -22,6 +23,48 @@ COROS_TYPE_DICT = {
 
 
 TIME_OUT = httpx.Timeout(240.0, connect=360.0)
+MAX_DOWNLOAD_REDIRECTS = 3
+MAX_DOWNLOAD_BYTES = 250 * 1024 * 1024
+
+
+def validate_download_url(value):
+    """Accept only public HTTPS file endpoints, never local network targets.
+
+    COROS provides signed URLs on storage domains that may differ by region.
+    COROS_DOWNLOAD_ALLOWED_HOSTS can pin exact observed domains without
+    guessing provider-specific storage hostnames.
+    """
+    if not isinstance(value, str) or not value or value != value.strip():
+        raise ValueError("COROS returned an unsafe download URL")
+    try:
+        url = httpx.URL(value)
+        host = (url.host or "").lower().rstrip(".")
+        if (
+            url.scheme != "https"
+            or not host
+            or url.username
+            or url.password
+            or url.port not in (None, 443)
+            or "." not in host
+            or host == "localhost"
+            or host.endswith((".localhost", ".local", ".internal"))
+        ):
+            raise ValueError("COROS returned an unsafe download URL")
+        try:
+            ipaddress.ip_address(host)
+        except ValueError:
+            pass
+        else:
+            raise ValueError("COROS download URL must use a DNS hostname")
+
+        allowed = os.getenv("COROS_DOWNLOAD_ALLOWED_HOSTS")
+        if allowed and host not in {
+            entry.strip().lower().rstrip(".") for entry in allowed.split(",")
+        }:
+            raise ValueError("COROS download URL host is not allowlisted")
+    except (httpx.InvalidURL, ValueError) as exc:
+        raise ValueError("COROS returned an unsafe download URL") from exc
+    return url
 
 
 class Coros:
@@ -31,6 +74,7 @@ class Coros:
         self.is_only_running = is_only_running
         self.headers = None
         self.req = None
+        self.download_req = None
         self.base_url = None
 
     async def login(self):
@@ -91,6 +135,11 @@ class Coros:
                     self.base_url = base_url
                     self.headers = auth_headers
                     self.req = httpx.AsyncClient(timeout=TIME_OUT, headers=auth_headers)
+                    # Never forward COROS access tokens or cookies to a signed
+                    # file URL, which may be hosted outside coros.com.
+                    self.download_req = httpx.AsyncClient(
+                        timeout=TIME_OUT, follow_redirects=False, trust_env=False
+                    )
                     print(f"COROS activity API region: {host}")
                     return
                 except (httpx.HTTPError, ValueError, TypeError):
@@ -170,6 +219,9 @@ class Coros:
         if not file_url:
             print(f"No file URL found for label_id {label_id}")
             return None, None
+        if self.download_req is None:
+            raise RuntimeError("COROS anonymous download client is not initialized")
+        file_url = validate_download_url(file_url)
 
         # Use the stable COROS activity ID rather than a signed URL's
         # basename (which can vary and may contain sensitive query data).
@@ -181,16 +233,34 @@ class Coros:
         )
         os.close(fd)
         try:
-            async with self.req.stream("GET", file_url) as response:
-                response.raise_for_status()
-                async with aiofiles.open(pending_path, "wb") as f:
-                    async for chunk in response.aiter_bytes():
-                        await f.write(chunk)
+            for redirect in range(MAX_DOWNLOAD_REDIRECTS + 1):
+                async with self.download_req.stream(
+                    "GET", str(file_url), follow_redirects=False
+                ) as response:
+                    if response.status_code in (301, 302, 303, 307, 308):
+                        if redirect == MAX_DOWNLOAD_REDIRECTS:
+                            raise ValueError("Too many COROS download redirects")
+                        location = response.headers.get("location")
+                        if not location:
+                            raise ValueError("COROS download redirect has no location")
+                        file_url = validate_download_url(
+                            str(response.url.join(location))
+                        )
+                        continue
+                    response.raise_for_status()
+                    downloaded_bytes = 0
+                    async with aiofiles.open(pending_path, "wb") as f:
+                        async for chunk in response.aiter_bytes():
+                            downloaded_bytes += len(chunk)
+                            if downloaded_bytes > MAX_DOWNLOAD_BYTES:
+                                raise ValueError("COROS export exceeds download limit")
+                            await f.write(chunk)
+                    break
             if os.path.getsize(pending_path) == 0:
                 raise ValueError("COROS returned an empty activity file")
             if file_type == "fit":
-                with open(pending_path, "rb") as f:
-                    if f.read(12)[8:12] != b".FIT":
+                async with aiofiles.open(pending_path, "rb") as f:
+                    if (await f.read(12))[8:12] != b".FIT":
                         raise ValueError("COROS returned an invalid FIT header")
             os.replace(pending_path, file_path)
         finally:
@@ -288,6 +358,8 @@ async def download_and_generate(
         print(f"Download finished. Elapsed {time.time() - start_time} seconds")
     finally:
         await coros.req.aclose()
+        if getattr(coros, "download_req", None) is not None:
+            await coros.download_req.aclose()
     skipped = sum(result == (None, None) for result in results)
     if skipped:
         print(
