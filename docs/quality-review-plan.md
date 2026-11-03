@@ -164,6 +164,35 @@ verify fresh-clone installation and both themes in a live browser, review
 old public PNG history/cache separately, and audit remaining upstream Python
 adapters/legacy frontend compatibility paths before any larger deletion.
 
+### Batch 5 integration review status
+
+After Batch 4, a separate integration branch verified clean-install behavior,
+Python/Node version matrices, both built themes, and browser interactions.
+The detailed evidence and remaining risks are in
+[integration-validation.md](integration-validation.md).
+
+- A Git archive of Batch 4 was initialized as an isolated Git repository and
+  installed with frozen pnpm 8.9.0 dependencies; a second clean archive
+  passed a normal pnpm install with lifecycle scripts enabled; Dashboard and Classic both
+  built successfully. No private data directories were copied or read.
+- Firefox 159 Headless loaded public Home, Tracks/Summary and both themes on
+  desktop/mobile. An additional Chinese-default Dashboard build verified
+  locale, theme and page navigation from the zh-CN starting state. Dashboard tested English/Chinese locale, light/dark toggles,
+  Home/Summary navigation, and 500 entirely synthetic redacted routes with
+  MapLibre canvas. Classic home/summary and theme toggle rendered, but Classic
+  still eagerly initializes Mapbox for route-less activities.
+- Python 3.14 exposed an outdated locked Pydantic/PyO3 dependency chain.
+  The actual CI pip install already worked, but `uv.lock` was inconsistent.
+  Updated the affected Python binary dependencies; `uv --locked` then passed
+  on Python 3.12, 3.13 and 3.14. Moved the unused-in-sync OpenAI image client
+  into an opt-in extra, and changed CI to discover all synthetic test cases.
+- The Firefox probe can now assert visible content, browser error counters
+  and basic real DOM interactions; it does not infer tile/network success
+  from WebGL canvas presence.
+
+No private COROS download, archive publication, upstream push, Vercel deploy,
+Git history rewrite, or production host change is part of this review.
+
 ## Ground rules
 
 - Preserve the upstream merge path; never push to `yihong0618/running_page`.

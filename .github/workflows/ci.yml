@@ -29,16 +29,8 @@ jobs:
 
       - name: Run offline regression tests
         run: |
-          # Public CI must never import raw GPS or generate a database.
-          python -m pytest -q \
-            test_privacy_export.py \
-            test_generator.py \
-            test_geography.py \
-            test_coros_sync.py \
-            test_reconciliation.py \
-            test_fit_training_import.py \
-            test_strava_sync_errors.py \
-            test_tui_app.py
+          # All checked-in test_*.py cases use synthetic inputs, not private data.
+          python -m pytest -q
 
       - name: Check formatting (black)
         run: black . --diff --color && black . --check
@@ -77,11 +69,7 @@ jobs:
           node scripts/check-public-repository.mjs
           node scripts/validate-public-data.mjs
           node scripts/validate-public-data.mjs data/samples/activities.sample.json
-          node --test scripts/release-safety.test.mjs
-          node --test scripts/domain.test.mjs
-          node --test scripts/route-geometry.test.mjs
-          node --test scripts/resilience.test.mjs
-          node --test scripts/heatmap.test.mjs
+          node --test scripts/*.test.mjs
           pnpm run check
           pnpm run lint
           pnpm run build

@@ -37,6 +37,23 @@ node scripts/performance/measure-browser.mjs \
   --scroll-footprint --out /tmp/running-footprint.json
 ```
 
+For a functional browser smoke check rather than a performance estimate,
+use the same local runner against a built production directory:
+
+```sh
+node scripts/performance/measure-browser.mjs \
+  --dataset public --viewport mobile --verify-ui dashboard \
+  --out /tmp/running-ui-smoke.json
+```
+
+`--verify-ui dashboard` checks a nonblank page, language and theme toggles,
+Summary/Home navigation and uncaught window errors. `--verify-ui classic`
+checks visible Classic content and its theme toggle; Classic has no separate
+Tracks route or live Dashboard locale control. The probe cannot establish
+that external map tiles rendered correctly, that screen readers work, or
+that all user journeys are accessible. It records **counts and Booleans**,
+not activity names or browser console messages.
+
 The browser runner needs Node ≥22 with global WebSocket and Firefox installed.
 It uses an isolated temporary profile and loopback servers, modifies neither
 the repository's public JSON nor the build, and outputs aggregate measurements.

@@ -15,6 +15,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { extname, join, resolve, sep } from 'node:path';
 import polyline from '@mapbox/polyline';
+import assert from 'node:assert/strict';
 
 const options = process.argv.slice(2);
 const option = (name, fallback) => {
@@ -37,6 +38,7 @@ const viewportFilter = option('--viewport', 'both');
 const settleMs = Number(option('--settle-ms', '2300'));
 const blockWebGL = options.includes('--block-webgl');
 const scrollFootprint = options.includes('--scroll-footprint');
+const verifyUI = option('--verify-ui', null);
 if (!['public', 'synthetic', 'both'].includes(datasetFilter))
   throw new Error('--dataset must be public, synthetic, or both');
 if (!['all', '/', '/tracks', '/summary'].includes(pageFilter))
@@ -45,6 +47,8 @@ if (!['desktop', 'mobile', 'both'].includes(viewportFilter))
   throw new Error('--viewport must be desktop, mobile, or both');
 if (!Number.isInteger(settleMs) || settleMs < 0 || settleMs > 30000)
   throw new Error('--settle-ms must be between 0 and 30000');
+if (verifyUI && !['dashboard', 'classic'].includes(verifyUI))
+  throw new Error('--verify-ui must be dashboard or classic');
 const manifest = JSON.parse(
   readFileSync(join(dist, '.vite/manifest.json'), 'utf8')
 );
@@ -194,8 +198,55 @@ const metricsCode = [
   'footprintPaths:document.querySelector(\'section[aria-label="Footprint map"] svg\')?.querySelectorAll("path").length??0,',
   'viewport:[innerWidth,innerHeight],',
   'heapBytes:performance.memory?.usedJSHeapSize??null,',
-  'availableEntries:PerformanceObserver.supportedEntryTypes',
+  'availableEntries:PerformanceObserver.supportedEntryTypes,',
+  'ui:{',
+  'rootChildren:document.querySelector("#root")?.children.length??0,',
+  'textCharacters:document.querySelector("#root")?.innerText?.length??0,',
+  'htmlLang:document.documentElement.lang,',
+  'currentPageButtons:document.querySelectorAll(\'button[aria-current="page"]\').length,',
+  'tables:document.querySelectorAll("table").length,',
+  'navs:document.querySelectorAll("nav").length,',
+  'uncaughtErrors:window.__runningSmokeErrors??0,',
+  'mapErrorVisible:!!document.querySelector(\'[class*="mapErrorNotification"]\'),',
+  'appError:document.querySelector("#root")?.innerText?.includes("Page error")??false,',
+  'activityError:document.querySelector("#root")?.innerText?.includes("Failed to load activities")??false',
+  '}',
   '});})()',
+].join('');
+
+const dashboardInteractionCode = [
+  '(async()=>{',
+  'const delay=(ms=160)=>new Promise(resolve=>setTimeout(resolve,ms));',
+  'const mode=Array.from(document.querySelectorAll("button")).find(b=>/^(Switch to (dark|light) mode|切换(浅色|深色)模式)$/.test(b.getAttribute("aria-label")||""));',
+  'const initial=mode?.getAttribute("aria-label");',
+  'mode?.click();await delay();',
+  'const switched=!!initial && mode.getAttribute("aria-label")!==initial;',
+  'mode?.click();await delay();',
+  'const restored=mode?.getAttribute("aria-label")===initial;',
+  'const initialLang=document.documentElement.lang;',
+  'const toggleLocale=()=>document.querySelector(\'button[title="切换中文"],button[title="Switch to English"]\')?.click();',
+  'toggleLocale();await delay();',
+  'const nextLang=document.documentElement.lang;',
+  'const localeChanged=nextLang!==initialLang && ["en","zh-CN"].includes(nextLang);',
+  'toggleLocale();await delay();',
+  'const localeRestored=document.documentElement.lang===initialLang;',
+  'Array.from(document.querySelectorAll("button")).find(b=>["Summary","汇总"].includes(b.textContent?.trim()))?.click();',
+  'await delay(700);',
+  'const summary=location.pathname==="/summary" && !!document.querySelector(\'button[aria-current="page"]\');',
+  'document.querySelector(\'button[aria-label="Go to home"],button[aria-label="回到首页"]\')?.click();await delay();',
+  'return JSON.stringify({switched,restored,localeChanged,localeRestored,summary,home:location.pathname==="/"});',
+  '})()',
+].join('');
+
+const classicInteractionCode = [
+  '(async()=>{',
+  'const mode=document.querySelector(\'button[aria-label^="Switch to "]\');',
+  'const initial=mode?.getAttribute("aria-label");',
+  'mode?.click();await new Promise(resolve=>setTimeout(resolve,160));',
+  'const switched=!!initial && mode.getAttribute("aria-label")!==initial;',
+  'mode?.click();await new Promise(resolve=>setTimeout(resolve,160));',
+  'return JSON.stringify({switched,restored:mode?.getAttribute("aria-label")===initial});',
+  '})()',
 ].join('');
 
 async function run() {
@@ -269,6 +320,18 @@ async function run() {
           const context = (
             await send('browsingContext.create', { type: 'tab' })
           ).context;
+          if (verifyUI) {
+            await send('script.addPreloadScript', {
+              contexts: [context],
+              functionDeclaration: [
+                '() => {',
+                'window.__runningSmokeErrors=0;',
+                'window.addEventListener("error",()=>window.__runningSmokeErrors++);',
+                'window.addEventListener("unhandledrejection",()=>window.__runningSmokeErrors++);',
+                '}',
+              ].join(''),
+            });
+          }
           if (blockWebGL) {
             await send('script.addPreloadScript', {
               contexts: [context],
@@ -305,6 +368,68 @@ async function run() {
             awaitPromise: true,
           });
           const row = JSON.parse(reading.result.value);
+          if (verifyUI) {
+            const ui = row.ui;
+            assert.ok(
+              ui.rootChildren > 0,
+              verifyUI + ' ' + page + ': empty root'
+            );
+            assert.ok(
+              ui.textCharacters > 100,
+              verifyUI +
+                ' ' +
+                page +
+                ': page appears blank or still loading (' +
+                ui.textCharacters +
+                ' chars)'
+            );
+            assert.ok(
+              !ui.appError && !ui.activityError,
+              verifyUI + ' ' + page + ': app error'
+            );
+            assert.equal(
+              ui.uncaughtErrors,
+              0,
+              page + ': uncaught browser errors'
+            );
+            if (verifyUI === 'dashboard') {
+              assert.equal(
+                ui.currentPageButtons,
+                1,
+                page + ': missing Dashboard navigation'
+              );
+              assert.ok(
+                ['en', 'zh-CN'].includes(ui.htmlLang),
+                page + ': document language'
+              );
+            } else {
+              assert.ok(
+                ui.tables > 0 || page === '/summary',
+                page + ': Classic run table absent'
+              );
+              assert.equal(ui.htmlLang, 'en', page + ': document language');
+            }
+            if (page === '/') {
+              const interaction = await send('script.evaluate', {
+                expression:
+                  verifyUI === 'dashboard'
+                    ? dashboardInteractionCode
+                    : classicInteractionCode,
+                target: { context },
+                awaitPromise: true,
+              });
+              assert.equal(interaction.result.type, 'string');
+              row.interaction = JSON.parse(interaction.result.value);
+              assert.ok(
+                Object.values(row.interaction).every(
+                  (passed) => passed === true
+                ),
+                verifyUI +
+                  ': interaction check failed: ' +
+                  JSON.stringify(row.interaction)
+              );
+            }
+          }
           // Firefox supports LCP via a buffered observer, not synchronous
           // getEntriesByType(). Never substitute FCP for an unavailable LCP.
           const lcp = await send('script.evaluate', {

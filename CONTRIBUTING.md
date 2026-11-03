@@ -16,7 +16,7 @@ pnpm run build                        # enforces the public data guard
 node scripts/performance/check-bundles.mjs
 ```
 
-Run `pnpm dev` to view the already-validated public snapshot instead. To run Python regression tests, use Python 3.12+ and install `requirements-dev.txt` in a virtual environment, then run `python -m pytest -q`. Python tests operate on synthetic fixtures; **never run provider downloads during CI or a PR check**.
+Run `pnpm dev` to view the already-validated public snapshot instead. To run Python regression tests, use Python 3.12+ and install `requirements-dev.txt` in a virtual environment, then run `python -m pytest -q`. Python tests operate on synthetic fixtures; **never run provider downloads during CI or a PR check**. The repository also has a tested `uv.lock` (Python 3.12–3.14): `uv run --locked python -m pytest -q`. The personal image generation script requires explicit `uv sync --extra share`; it is not part of the CI/sync dependency set.
 
 ## Code expectations
 

@@ -48,6 +48,11 @@ Nike and others are still present for _manual/upstream interoperability_; none
 are selectable through this fork's scheduled workflow. Do not reintroduce
 multi-provider secret command-line invocations in a public CI job.
 
+The optional personal image-sharing helper `run_page/auto_share_sync.py` is
+manual-only. Its `openai` SDK is installed with `uv sync --extra share`; it
+is intentionally absent from the COROS `requirements.txt` and regular CI.
+Never expose an image-generation API key or original GPS through public jobs.
+
 ### Required GitHub Actions settings
 
 | Name                           | Kind              | Purpose                                                                   |

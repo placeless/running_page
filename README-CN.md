@@ -64,6 +64,8 @@ Vercel → Cloudflare 代理 → 浏览器
 
 `run_page/` 中的其它历史平台脚本仍为上游兼容、手动使用保留；**自动同步只支持 COROS**。本 Fork 不再提供 GitHub Pages 自动发布流程，也不包含 Cloudflare Workers 部署代码。
 
+旧版 AI 路线分享脚本 `run_page/auto_share_sync.py` 属于可选私人功能，可能处理未脱敏路线。其 `openai` SDK 已移至可选的 Python `share` 依赖组（`uv sync --extra share`），不参与公开同步或 CI，也不能将相关密钥上传至仓库。
+
 ## 个性化与扩展
 
 修改 `config.yml` 可以设置 Dashboard／Classic、默认语言、深浅主题、运动目标及已有的公开资料配置。新增主题在 `src/themes/<name>/` 下建立模块，并在 `src/App.tsx` 中注册。共享统计及日期计算优先复用 `src/core/`，避免在组件中重新实现。
@@ -77,7 +79,7 @@ Vercel → Cloudflare 代理 → 浏览器
 - **生产环境**：由 Vercel 从 Git 构建 `dist/`；Vercel 环境变量与 GitHub Actions secrets 是两套配置。不能把本仓库操作应用到另一个 Cloudflare 站点。
 - **隐私**：`private/`、原始 FIT／GPX／TCX、SQLite、`PNG_OUT/` 个人分享图、训练原始文件和 GPS 海报均不得加入公开 Git。`.gitignore` 不能消除历史泄露；历史处理另见专门文档。
 
-具体说明：[Fork 维护](docs/fork-maintenance.md)、[部署边界](docs/deployment-boundaries.md)、[隐私导出](docs/privacy-export.md)、[数据对账](docs/data-integrity.md)、[性能实测](docs/performance.md)、[Git 历史处理](docs/history-remediation.md)。
+具体说明：[Fork 维护](docs/fork-maintenance.md)、[部署边界](docs/deployment-boundaries.md)、[隐私导出](docs/privacy-export.md)、[数据对账](docs/data-integrity.md)、[性能实测](docs/performance.md)、[集成验收](docs/integration-validation.md)、[Git 历史处理](docs/history-remediation.md)。
 
 ## 参与贡献与原作者
 

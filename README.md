@@ -64,6 +64,8 @@ The browser **never** needs COROS credentials, original FITs, SQLite, or the pri
 
 Other historical Python provider adapters remain available under `run_page/` for **manual/upstream interoperability**; the automated workflow intentionally invokes **COROS only**. GitHub Pages and Cloudflare Workers are not maintained deployment adapters in this fork.
 
+The optional AI-assisted personal sharing tool (`run_page/auto_share_sync.py`) is not part of the public sync and may process unredacted routes. Its `openai` dependency is available only through the opt-in Python `share` extra (`uv sync --extra share`); use it solely with private files and credentials.
+
 ## Configure and extend
 
 Edit `config.yml` for dashboard/classic theme, locale, goals, colors/branding where supported and the default appearance. To add a theme, create a coherent module under `src/themes/<name>/` and register it in `src/App.tsx`; reuse `src/core/` domain calculations rather than duplicating them in components.
@@ -79,7 +81,7 @@ All source-code changes should have behavioral tests where possible. Prefer asse
 - **Vercel** builds the public `dist/` frontend from Git. Its build environment is separate from GitHub Actions secrets. This repository neither deploys to the separate Cloudflare Worker/Pages app nor contains an active GitHub Pages publisher.
 - **Privacy**: `private/`, FIT/GPX/TCX, SQLite, `PNG_OUT/`, raw workout outputs and generated personal posters must never enter public Git history or builds. Historical exposures require separate remediation, not merely `.gitignore`.
 
-See [fork maintenance](docs/fork-maintenance.md), [deployment boundaries](docs/deployment-boundaries.md), [privacy-export policy](docs/privacy-export.md), [data integrity](docs/data-integrity.md), [performance measurements](docs/performance.md) and [history remediation](docs/history-remediation.md).
+See [fork maintenance](docs/fork-maintenance.md), [deployment boundaries](docs/deployment-boundaries.md), [privacy-export policy](docs/privacy-export.md), [data integrity](docs/data-integrity.md), [performance measurements](docs/performance.md), [integration validation](docs/integration-validation.md) and [history remediation](docs/history-remediation.md).
 
 ## Contributing and attribution
 
