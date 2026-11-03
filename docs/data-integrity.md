@@ -73,3 +73,10 @@ node scripts/validate-public-data.mjs private/public-preview.json
 Verify the cutoff date and counts at each new export. Source database and
 raw FIT files stay in the separately secured private archive. Never stage
 `private/`, `run_page/data.db`, `FIT_OUT/`, or historic route SVGs.
+
+**Follow-up, 2026-11-03:** a manual run of the GitHub Actions COROS workflow
+succeeded. It reported 96 activities in the configured date range, 96
+previously downloaded FIT files, and no additional downloads. The privacy
+cutoff advanced by one date and published the October 30 run; public JSON
+grew from **934 to 935** without exposing GPS geometry. This verifies the
+current export, but not provider completeness before the COROS cutoff.

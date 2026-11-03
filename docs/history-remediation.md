@@ -11,7 +11,8 @@ This is specific to `placeless/running_page`, not to the independent
 The public Git index contains no tracked FIT/GPX/TCX, database, import
 manifest or personalized generated SVG. At the beginning of this audit,
 `src/static/activities.json` contained 909 records with no route geometry.
-The corrected November 3 publication contains **934**, still with no route
+The first corrected November 3 publication contained **934**, and a
+subsequent successful COROS sync published **935**, still with no route
 geometry. A local build audit also identified 29 ignored
 generated SVGs that Vite's legacy glob imported into `dist/`; they were moved
 into a local ignored `private/` folder, and the build guard was hardened to
@@ -262,7 +263,7 @@ all embedded historical credentials or coordinates have been inspected.
   Following approval, Vercel's deletion endpoint returned `DELETED` for
   each of the nine targets. An account-level follow-up returned precisely
   the three expected clean deployments, with none of the nine old IDs
-  remaining. The current production target still points to commit
+  remaining. At that checkpoint, the production target still pointed to commit
   `77244ec0` and retains the `m.placeless.net` alias. The domain returned
   HTTP 200 after cleanup; a checked deleted deployment URL returned 404.
 - **GitHub cache retention:** changing `master` does not necessarily
