@@ -45,7 +45,11 @@ The exporter clips start and end portions of each route, removes _all_ points
 and crossing segments around protected places, and writes each resulting
 visible section separately in `route_segments`. `summary_polyline` contains
 only the longest approved section for legacy consumers. Nothing joins two
-sections across a hidden place; the dashboard map renders all approved parts.
+sections across a hidden place; the dashboard map and track thumbnails render
+each approved part independently. The track wall groups similar visible route
+shapes conservatively and retains explicit access to every activity in a group.
+If WebGL fails, the map-local fallback exposes a list of the already-public
+activities instead of unmounting the rest of the page.
 The original recorded distance and duration remain unchanged, even when map
 geometry is reduced.
 

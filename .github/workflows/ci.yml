@@ -78,6 +78,8 @@ jobs:
           node scripts/validate-public-data.mjs
           node --test scripts/release-safety.test.mjs
           node --test scripts/domain.test.mjs
+          node --test scripts/route-geometry.test.mjs
+          node --test scripts/resilience.test.mjs
           pnpm run check
           pnpm run lint
           pnpm run build

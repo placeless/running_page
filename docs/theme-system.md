@@ -12,7 +12,7 @@ const themes: Record<string, React.LazyExoticComponent<React.ComponentType>> = {
   dashboard: lazy(() => import('./themes/dashboard')),
   classic: lazy(() => import('./themes/classic')),
   // 在此添加自定义主题
-}
+};
 ```
 
 构建时，`config.yml` 中的 `theme_preset` 决定加载哪个主题。所有主题共享核心层 (`src/core/`)——类型、i18n 翻译、活动数据钩子和语言工具。
@@ -27,13 +27,14 @@ Dashboard 主题是为跑者设计的现代化单页布局，提供丰富的小�
 - **热力图** — GitHub 风格的活动网格，每日详情，支持导出 PNG
 - **活动日志** — 分页表格，支持距离筛选（10km+、20km+、40km+），运动类型图标
 - **路线地图** — 优先使用 Mapbox，失败时尝试 CARTO 或纯轨迹底图；默认聚焦最近一条路线，可切换到全部路线视图
-- **轨迹墙** — 全页轨迹网格，智能聚类（按起终点），支持导出 PNG
+- **轨迹墙** — 全页轨迹网格，按路线形状保守分组且可展开所有成员；支持隐私裁剪后的分段路线及 PNG 导出
 - **足迹地图** — 世界国家分布及省级地区统计、点击筛选；进入中国后可查看省份边界地图
-- **个人最佳** — 自动检测 PR（5K、10K、半马、全马）
+- **近标准距离最快活动** — 以完整活动距离（±1%）比较 5K、10K、半马、全马附近的记录；并非精确分段 PB 或赛事官方成绩
 - **日历小部件** — 月度日历，气泡显示距离
 - **深色/浅色模式** — 跟随系统或手动切换
 
 主要特性：
+
 - 所有数据在一个页面展示（无需路由跳转）
 - 点击任意活动即可在地图和日志中查看
 - 热力图和轨迹墙支持导出为 PNG 图片
@@ -41,7 +42,7 @@ Dashboard 主题是为跑者设计的现代化单页布局，提供丰富的小�
 
 ### Classic
 
-Classic 主题保留了原始的多页面布局，每个视图有独立路由。使用 `react-router-dom` 导航和 `react-map-gl` 地图。如果你更喜欢原始风格，或从 v2.x 升级，推荐选择此主题。
+Classic 主题保留了原始的多页面布局，每个视图有独立路由。使用 `react-router-dom` 导航和 `react-map-gl` 地图，与 Dashboard 共用可重置的活动数据加载器。如果你更喜欢原始风格，或从 v2.x 升级，推荐选择此主题。
 
 > **注意：** 如果你从 v2.x 升级，可在 `config.yml` 中设置 `theme_preset: classic`。
 
@@ -53,14 +54,14 @@ Classic 主题保留了原始的多页面布局，每个视图有独立路由。
 
 ```tsx
 // src/themes/minimal/index.tsx
-import { getActivityData } from '@/hooks/useActivities'
-import { useTheme } from '@/hooks/useTheme'
-import { useLocale } from '@/hooks/useLocale'
-import type { Activity } from '@/types'
+import { getActivityData } from '@/hooks/useActivities';
+import { useTheme } from '@/hooks/useTheme';
+import { useLocale } from '@/hooks/useLocale';
+import type { Activity } from '@/types';
 
 export default function Minimal() {
-  const activities = getActivityData() as Activity[]
-  const { t } = useLocale()
+  const activities = getActivityData() as Activity[];
+  const { t } = useLocale();
   // ... 你的自定义布局
 }
 ```
@@ -72,7 +73,7 @@ const themes = {
   dashboard: lazy(() => import('./themes/dashboard')),
   classic: lazy(() => import('./themes/classic')),
   minimal: lazy(() => import('./themes/minimal')), // 添加这行
-}
+};
 ```
 
 5. 在 `config.yml` 中设置 `theme_preset: minimal`
@@ -81,12 +82,12 @@ const themes = {
 
 所有主题可用的钩子和工具：
 
-| 模块 | 导出 |
-|--------|---------|
+| 模块                    | 导出                                                                                                                                                                    |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@/hooks/useActivities` | `getActivityData()`、`useFilteredActivities()`、`getAvailableYears()`、`formatDistance()`、`formatPace()`、`formatDuration()`、`parseMovingTime()`、`extractProvince()` |
-| `@/hooks/useLocale` | `useLocale()` → `{ t, locale }` 用于 i18n |
-| `@/hooks/useTheme` | `useTheme()` → `{ dark, toggle }` 用于深/浅色模式 |
-| `@/types` | `Activity`、`SportFilter` 类型 |
-| `@/config` | `MAPBOX_TOKEN`、`AVATAR`、`GOALS`、`DEFAULT_LOCALE`、`THEME_PRESET` |
+| `@/hooks/useLocale`     | `useLocale()` → `{ t, locale }` 用于 i18n                                                                                                                               |
+| `@/hooks/useTheme`      | `useTheme()` → `{ dark, toggle }` 用于深/浅色模式                                                                                                                       |
+| `@/types`               | `Activity`、`SportFilter` 类型                                                                                                                                          |
+| `@/config`              | `MAPBOX_TOKEN`、`AVATAR`、`GOALS`、`DEFAULT_LOCALE`、`THEME_PRESET`                                                                                                     |
 
 Dashboard 主题的组件 (`src/components/`) 也可复用 —— 如需要可在自定义主题中导入。

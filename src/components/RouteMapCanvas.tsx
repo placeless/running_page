@@ -3,12 +3,13 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import * as polyline from '@mapbox/polyline';
 import type { Activity } from '../types';
 import { hasRoute, routeForActivity } from '../core/routeFallback';
+import { decodedRouteSegments } from '../core/routeGeometry';
 import { routeViewport, type RouteView } from '../core/routeViewport';
 import { MAPBOX_TOKEN } from '../config';
 import { useLocale } from '../hooks/useLocale';
+import { RouteMapUnavailable } from './RouteMapUnavailable';
 import './RouteMap.css';
 
 export interface RouteMapProps {
@@ -17,6 +18,7 @@ export interface RouteMapProps {
   selectedActivity?: Activity | null;
   dark?: boolean;
   onClearSelection?: () => void;
+  onSelectActivity?: (activity: Activity) => void;
 }
 
 const routeCache = new WeakMap<
@@ -34,6 +36,7 @@ export function RouteMapCanvas({
   selectedActivity,
   dark,
   onClearSelection,
+  onSelectActivity,
 }: RouteMapProps) {
   const { locale } = useLocale();
   const zh = locale === 'zh';
@@ -103,38 +106,16 @@ export function RouteMapCanvas({
     return routeActivities.flatMap((activity) => {
       const cached = routeCache.get(activity);
       if (cached) return cached.length ? [cached] : [];
-      const encodedSegments =
-        activity.route_segments ??
-        (activity.summary_polyline ? [activity.summary_polyline] : []);
-      try {
-        const features = encodedSegments.flatMap((encoded) => {
-          const coordinates = polyline
-            .decode(encoded)
-            .map(([lat, lng]) => [lng, lat]);
-          if (
-            coordinates.length < 2 ||
-            !coordinates.every(
-              ([lng, lat]) =>
-                Number.isFinite(lng) &&
-                Number.isFinite(lat) &&
-                Math.abs(lng) <= 180 &&
-                Math.abs(lat) <= 90
-            )
-          )
-            return [];
-          return [
-            {
-              type: 'Feature' as const,
-              properties: { type: activity.type },
-              geometry: { type: 'LineString' as const, coordinates },
-            },
-          ];
-        });
-        routeCache.set(activity, features);
-        return features.length ? [features] : [];
-      } catch {
-        return [];
-      }
+      const features = decodedRouteSegments(activity).map((points) => ({
+        type: 'Feature' as const,
+        properties: { type: activity.type },
+        geometry: {
+          type: 'LineString' as const,
+          coordinates: points.map(([lat, lng]) => [lng, lat]),
+        },
+      }));
+      routeCache.set(activity, features);
+      return features.length ? [features] : [];
     });
   }, [routeActivities]);
   const routes = useMemo(() => routeGroups.flat(), [routeGroups]);
@@ -336,18 +317,32 @@ export function RouteMapCanvas({
       zoom: 10,
       ...cameraRef.current,
     });
-    mapRef.current = map;
-    map.addControl(new engine.NavigationControl(), 'top-right');
-    map.addControl(
-      new engine.FullscreenControl({ container: panelRef.current }),
-      'top-right'
-    );
-    map.addControl(
-      new engine.ScaleControl({ unit: 'metric', maxWidth: 90 }),
-      'bottom-left'
-    );
-    const observer = new ResizeObserver(() => map.resize());
-    observer.observe(containerRef.current);
+    let observer: ResizeObserver | null = null;
+    const resize = () => map.resize();
+    try {
+      mapRef.current = map;
+      map.addControl(new engine.NavigationControl(), 'top-right');
+      map.addControl(
+        new engine.FullscreenControl({ container: panelRef.current }),
+        'top-right'
+      );
+      map.addControl(
+        new engine.ScaleControl({ unit: 'metric', maxWidth: 90 }),
+        'bottom-left'
+      );
+      if (typeof ResizeObserver === 'undefined') {
+        window.addEventListener('resize', resize);
+      } else {
+        observer = new ResizeObserver(resize);
+        observer.observe(containerRef.current);
+      }
+    } catch (error) {
+      observer?.disconnect();
+      window.removeEventListener('resize', resize);
+      map.remove();
+      mapRef.current = null;
+      throw error;
+    }
     return () => {
       cameraRef.current = {
         center: map.getCenter(),
@@ -355,7 +350,8 @@ export function RouteMapCanvas({
         bearing: map.getBearing(),
         pitch: map.getPitch(),
       };
-      observer.disconnect();
+      observer?.disconnect();
+      window.removeEventListener('resize', resize);
       map.remove();
       mapRef.current = null;
     };
@@ -387,8 +383,16 @@ export function RouteMapCanvas({
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
+    let active = true;
+    const onStyleSetupError = () => {
+      if (!active) return;
+      if (provider === 'mapbox') setProvider('carto');
+      else if (provider === 'carto') setProvider('plain');
+      else setStatus('error');
+    };
     const onError = (event: mapboxgl.ErrorEvent) => {
-      const code = (event.error as Error & { status?: number }).status;
+      const code = (event.error as (Error & { status?: number }) | undefined)
+        ?.status;
       if (
         provider === 'mapbox' &&
         (!styleReadyRef.current || code === 401 || code === 403)
@@ -408,11 +412,15 @@ export function RouteMapCanvas({
     map.on('idle', onIdle);
     map.once('styledataloading', onLoading);
     styleReadyRef.current = false;
-    map.setStyle(style, {
-      diff: false,
-      localFontFamily: undefined,
-      localIdeographFontFamily: 'sans-serif',
-    });
+    try {
+      map.setStyle(style, {
+        diff: false,
+        localFontFamily: undefined,
+        localIdeographFontFamily: 'sans-serif',
+      });
+    } catch {
+      queueMicrotask(onStyleSetupError);
+    }
     const timer = window.setTimeout(() => {
       if (!styleReadyRef.current) {
         if (provider === 'mapbox') setProvider('carto');
@@ -421,6 +429,7 @@ export function RouteMapCanvas({
       }
     }, 15000);
     return () => {
+      active = false;
       window.clearTimeout(timer);
       map.off('error', onError);
       map.off('idle', onIdle);
@@ -432,15 +441,22 @@ export function RouteMapCanvas({
     const map = mapRef.current;
     if (!map) return;
     const onStyleLoad = () => {
-      styleReadyRef.current = true;
-      drawRoutes();
+      try {
+        styleReadyRef.current = true;
+        drawRoutes();
+      } catch {
+        styleReadyRef.current = false;
+        if (provider === 'mapbox') setProvider('carto');
+        else if (provider === 'carto') setProvider('plain');
+        else setStatus('error');
+      }
     };
     map.on('style.load', onStyleLoad);
     drawRoutes();
     return () => {
       map.off('style.load', onStyleLoad);
     };
-  }, [drawRoutes, style, retry]);
+  }, [drawRoutes, style, provider, retry]);
 
   useEffect(() => {
     let wasFullscreen = document.fullscreenElement === panelRef.current;
@@ -535,7 +551,11 @@ export function RouteMapCanvas({
             : `This activity has no usable GPS route. Showing the most recent earlier mapped activity: ${fallbackActivity.name} (${fallbackActivity.start_date_local}).`}
         </p>
       )}
-      <div className="route-map-body">
+      <div
+        className={
+          status === 'error' ? 'route-map-body hidden' : 'route-map-body'
+        }
+      >
         <div ref={containerRef} className="h-full w-full" />
         {!routes.length && (
           <div className="route-map-empty" role="status">
@@ -547,6 +567,18 @@ export function RouteMapCanvas({
           </div>
         )}
       </div>
+      {status === 'error' && (
+        <RouteMapUnavailable
+          activities={routeActivities}
+          onSelectActivity={onSelectActivity}
+          embedded
+          onRetry={() => {
+            setStatus('loading');
+            setProvider(MAPBOX_TOKEN ? 'mapbox' : 'carto');
+            setRetry((value) => value + 1);
+          }}
+        />
+      )}
       <div className="route-map-footer">
         <span role="status" aria-live="polite">
           {status === 'error'

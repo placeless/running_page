@@ -1,7 +1,8 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { exportCard } from '../utils/exportCard';
 import { RouteMap } from './RouteMap';
-import * as polyline from '@mapbox/polyline';
+import { thumbnailPaths } from '../core/routeGeometry';
+import { hasRoute } from '../core/routeFallback';
 import type { Activity } from '../types';
 import {
   getAvailableYears,
@@ -27,33 +28,6 @@ interface TracksPageProps {
   onSelectActivity?: (a: Activity | null) => void;
 }
 
-function renderTrackSVG(summaryPolyline: string, size = 80): string {
-  try {
-    const coords = polyline.decode(summaryPolyline);
-    if (coords.length < 2) return '';
-    const lats = coords.map((c) => c[0]);
-    const lngs = coords.map((c) => c[1]);
-    const minLat = Math.min(...lats),
-      maxLat = Math.max(...lats);
-    const minLng = Math.min(...lngs),
-      maxLng = Math.max(...lngs);
-    const latRange = maxLat - minLat || 0.001;
-    const lngRange = maxLng - minLng || 0.001;
-    const scale = Math.min((size - 8) / lngRange, (size - 8) / latRange);
-    const offsetX = (size - lngRange * scale) / 2;
-    const offsetY = (size - latRange * scale) / 2;
-    return coords
-      .map(([lat, lng]) => {
-        const x = (lng - minLng) * scale + offsetX;
-        const y = size - ((lat - minLat) * scale + offsetY);
-        return `${x.toFixed(1)},${y.toFixed(1)}`;
-      })
-      .join(' ');
-  } catch {
-    return '';
-  }
-}
-
 const TrackThumb = memo(function TrackThumb({
   activity,
   color,
@@ -66,20 +40,14 @@ const TrackThumb = memo(function TrackThumb({
   onClick: (activity: Activity) => void;
 }) {
   const size = 80;
-  const points = useMemo(
-    () =>
-      activity.summary_polyline
-        ? renderTrackSVG(activity.summary_polyline, size)
-        : '',
-    [activity.summary_polyline]
-  );
-  if (!points) return null;
+  const paths = useMemo(() => thumbnailPaths(activity, size), [activity]);
+  if (!paths.length) return null;
   return (
     <button
       type="button"
       aria-pressed={selected}
       aria-label={`${activity.start_date_local.slice(0, 16)} · ${activity.name} · ${(activity.distance / 1000).toFixed(1)} km`}
-      className={`track-thumb group relative cursor-pointer rounded transition-all ${selected ? 'ring-2 ring-[var(--color-accent)] ring-offset-1 ring-offset-[var(--color-bg)]' : ''}`}
+      className={`track-thumb group relative cursor-pointer rounded transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)] ${selected ? 'ring-2 ring-[var(--color-accent)] ring-offset-1 ring-offset-[var(--color-bg)]' : ''}`}
       onClick={() => onClick(activity)}
       title={`${activity.name} — ${(activity.distance / 1000).toFixed(1)} km`}
     >
@@ -89,14 +57,17 @@ const TrackThumb = memo(function TrackThumb({
         viewBox={`0 0 ${size} ${size}`}
         className={`transition-opacity ${selected ? 'opacity-100' : 'opacity-60 group-hover:opacity-100'}`}
       >
-        <polyline
-          points={points}
-          fill="none"
-          stroke={color}
-          strokeWidth={selected ? '2' : '1.5'}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
+        {paths.map((points) => (
+          <polyline
+            key={points}
+            points={points}
+            fill="none"
+            stroke={color}
+            strokeWidth={selected ? '2' : '1.5'}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        ))}
       </svg>
     </button>
   );
@@ -159,11 +130,7 @@ export function TracksPage({
     [activities, selectedYear, sportFilter]
   );
 
-  const withPolyline = useMemo(
-    () =>
-      base.filter((a) => a.summary_polyline && a.summary_polyline.length > 20),
-    [base]
-  );
+  const withPolyline = useMemo(() => base.filter(hasRoute), [base]);
 
   const { totalDist, totalTime, avgPace } = useMemo(() => {
     let totalDist = 0,
@@ -179,60 +146,113 @@ export function TracksPage({
     };
   }, [base]);
 
-  // Cluster tracks — defer heavy work
-  type Cluster = { representative: Activity; count: number; color: string };
+  // Defer geometry-based grouping to the worker, but preserve every member.
+  type Cluster = {
+    representative: Activity;
+    members: Activity[];
+    color: string;
+  };
   const [clusteredTracks, setClusteredTracks] = useState<Cluster[]>([]);
   const [clusteredInput, setClusteredInput] = useState<Activity[] | null>(null);
-  const clustering = clusteredInput !== withPolyline;
+  const [expandedClusters, setExpandedClusters] = useState<Set<number>>(
+    () => new Set()
+  );
+  const clustering = withPolyline.length > 0 && clusteredInput !== withPolyline;
+  const currentClusters = withPolyline.length ? clusteredTracks : [];
 
   useEffect(() => {
-    const worker = new Worker(
-      new URL('../workers/clusterTracks.worker.ts', import.meta.url),
-      { type: 'module' }
-    );
-    worker.onmessage = ({
-      data,
-    }: MessageEvent<{ index: number; count: number }[]>) => {
-      setClusteredTracks(
-        data.map(({ index, count }) => ({
-          representative: withPolyline[index],
-          count,
-          color: getColor(withPolyline[index]),
-        }))
-      );
-      setClusteredInput(withPolyline);
-    };
-    // If workers are unavailable, keep every route usable instead of an endless spinner.
-    worker.onerror = () => {
+    let active = true;
+    let worker: Worker | null = null;
+    const fallback = () => {
+      if (!active) return;
       setClusteredTracks(
         withPolyline.map((representative) => ({
           representative,
-          count: 1,
+          members: [representative],
           color: getColor(representative),
         }))
       );
       setClusteredInput(withPolyline);
     };
-    worker.postMessage(
-      withPolyline.map(({ summary_polyline, start_date_local, distance }) => ({
-        summary_polyline,
-        start_date_local,
-        distance,
-      }))
-    );
-    return () => worker.terminate();
+    if (!withPolyline.length) {
+      return () => {
+        active = false;
+      };
+    }
+    try {
+      worker = new Worker(
+        new URL('../workers/clusterTracks.worker.ts', import.meta.url),
+        { type: 'module' }
+      );
+      worker.onmessage = ({ data }: MessageEvent<number[][]>) => {
+        if (!active) return;
+        const next = data.flatMap((indexes) => {
+          const members = indexes
+            .map((index) => withPolyline[index])
+            .filter((member): member is Activity => !!member);
+          if (!members.length) return [];
+          const representative = members[0];
+          return [
+            {
+              representative,
+              members,
+              color: getColor(representative),
+            },
+          ];
+        });
+        // If a worker returned an incomplete set, retain accessibility.
+        const included = new Set(next.flatMap((group) => group.members));
+        for (const representative of withPolyline) {
+          if (!included.has(representative))
+            next.push({
+              representative,
+              members: [representative],
+              color: getColor(representative),
+            });
+        }
+        setClusteredTracks(next);
+        setClusteredInput(withPolyline);
+      };
+      worker.onerror = fallback;
+      worker.postMessage(
+        withPolyline.map(
+          ({
+            summary_polyline,
+            route_segments,
+            start_date_local,
+            distance,
+          }) => ({
+            summary_polyline,
+            route_segments,
+            start_date_local,
+            distance,
+          })
+        )
+      );
+    } catch {
+      // Worker construction and postMessage can also fail on some browsers.
+      worker?.terminate();
+      worker = null;
+      queueMicrotask(fallback);
+    }
+    return () => {
+      active = false;
+      worker?.terminate();
+    };
   }, [withPolyline]);
 
   const sortedTracks = useMemo(
     () =>
-      [...clusteredTracks].sort((a, b) =>
-        sortBy === 'distance'
-          ? b.representative.distance - a.representative.distance
-          : b.representative.start_date_local.localeCompare(
-              a.representative.start_date_local
-            )
-      ),
-    [clusteredTracks, sortBy]
+      withPolyline.length
+        ? [...clusteredTracks].sort((a, b) =>
+            sortBy === 'distance'
+              ? b.representative.distance - a.representative.distance
+              : b.representative.start_date_local.localeCompare(
+                  a.representative.start_date_local
+                )
+          )
+        : [],
+    [clusteredTracks, sortBy, withPolyline.length]
   );
 
   const handleSelectTrack = useCallback(
@@ -465,6 +485,7 @@ export function TracksPage({
             activities={withPolyline}
             allActivities={activities}
             selectedActivity={selectedActivity}
+            onSelectActivity={handleSelectTrack}
             dark={dark}
             onClearSelection={() => {
               setSelectedActivity(null);
@@ -486,7 +507,7 @@ export function TracksPage({
                   aria-label={locale === 'zh' ? '较新的年份' : 'Newer years'}
                   onClick={() => setYearPage((p) => Math.max(0, p - 1))}
                   disabled={yearPage === 0}
-                  className="px-1 text-base leading-none text-[var(--color-muted)] transition-colors hover:text-[var(--color-text)] disabled:opacity-30"
+                  className="min-h-9 min-w-9 px-1 text-base leading-none text-[var(--color-muted)] transition-colors hover:text-[var(--color-text)] disabled:opacity-30"
                 >
                   ‹
                 </button>
@@ -500,7 +521,7 @@ export function TracksPage({
                   setSelectedActivity(null);
                   onSelectActivity?.(null);
                 }}
-                className={`rounded-full px-3 py-1 text-xs font-medium ${selectedYear === null ? 'bg-[var(--color-accent)] text-[var(--color-on-accent)]' : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'}`}
+                className={`inline-flex min-h-9 items-center rounded-full px-3 py-1 text-xs font-medium ${selectedYear === null ? 'bg-[var(--color-accent)] text-[var(--color-on-accent)]' : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'}`}
               >
                 {locale === 'zh' ? '全部' : 'All'}
               </button>
@@ -515,7 +536,7 @@ export function TracksPage({
                     setSelectedActivity(null);
                     onSelectActivity?.(null);
                   }}
-                  className={`rounded-full px-3 py-1 text-xs font-medium ${selectedYear === yr ? 'bg-[var(--color-accent)] text-[var(--color-on-accent)]' : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'}`}
+                  className={`inline-flex min-h-9 items-center rounded-full px-3 py-1 text-xs font-medium ${selectedYear === yr ? 'bg-[var(--color-accent)] text-[var(--color-on-accent)]' : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'}`}
                 >
                   {yr}
                 </button>
@@ -527,7 +548,7 @@ export function TracksPage({
                   }
                   aria-label={locale === 'zh' ? '较早的年份' : 'Older years'}
                   disabled={yearPage === totalYearPages - 1}
-                  className="px-1 text-base leading-none text-[var(--color-muted)] transition-colors hover:text-[var(--color-text)] disabled:opacity-30"
+                  className="min-h-9 min-w-9 px-1 text-base leading-none text-[var(--color-muted)] transition-colors hover:text-[var(--color-text)] disabled:opacity-30"
                 >
                   ›
                 </button>
@@ -543,7 +564,7 @@ export function TracksPage({
                     setSelectedActivity(null);
                     onSelectActivity?.(null);
                   }}
-                  className={`rounded-full border px-3 py-1 text-xs font-medium ${sportFilter === null ? 'border-transparent bg-[var(--color-accent)] text-[var(--color-on-accent)]' : 'border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]'}`}
+                  className={`inline-flex min-h-9 items-center rounded-full border px-3 py-1 text-xs font-medium ${sportFilter === null ? 'border-transparent bg-[var(--color-accent)] text-[var(--color-on-accent)]' : 'border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]'}`}
                 >
                   {locale === 'zh' ? '全部' : 'All'}
                 </button>
@@ -560,7 +581,7 @@ export function TracksPage({
                         setSelectedActivity(null);
                         onSelectActivity?.(null);
                       }}
-                      className={`rounded-full border px-3 py-1 text-xs font-medium ${sportFilter === value ? 'border-transparent text-white' : 'border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]'}`}
+                      className={`inline-flex min-h-9 items-center rounded-full border px-3 py-1 text-xs font-medium ${sportFilter === value ? 'border-transparent text-[#171717]' : 'border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]'}`}
                       style={
                         sportFilter === value ? { backgroundColor: color } : {}
                       }
@@ -596,8 +617,8 @@ export function TracksPage({
                     }
                   }}
                   data-export-hidden
-                  disabled={exporting || clustering || !clusteredTracks.length}
-                  className="flex h-6 w-6 items-center justify-center rounded text-[var(--color-muted)] transition-all hover:text-[var(--color-text)] disabled:opacity-50"
+                  disabled={exporting || clustering || !currentClusters.length}
+                  className="flex h-9 w-9 items-center justify-center rounded text-[var(--color-muted)] transition-all hover:text-[var(--color-text)] disabled:opacity-50"
                   title={locale === 'zh' ? '导出图片' : 'Export as image'}
                 >
                   {exporting ? (
@@ -656,37 +677,86 @@ export function TracksPage({
                 {trackPlaceholders.map((placeholder) => (
                   <div
                     key={placeholder.id}
-                    className="h-[80px] w-[80px] animate-pulse rounded bg-[var(--color-border)]"
+                    className="h-[80px] w-[80px] animate-pulse rounded bg-[var(--color-border)] motion-reduce:animate-none"
                     style={{ animationDelay: `${placeholder.delay}ms` }}
                   />
                 ))}
               </div>
-            ) : clusteredTracks.length === 0 ? (
+            ) : currentClusters.length === 0 ? (
               <p className="py-8 text-center text-sm text-[var(--color-muted)]">
                 {locale === 'zh' ? '暂无轨迹数据' : 'No tracks found'}
               </p>
             ) : (
               <div className="flex flex-wrap gap-1">
-                {sortedTracks.map(({ representative: a, count, color }) => (
-                  <div key={a.run_id} className="track-cell relative">
-                    <TrackThumb
-                      activity={a}
-                      color={color}
-                      selected={selectedActivity?.run_id === a.run_id}
-                      onClick={handleSelectTrack}
-                    />
-                    {count > 1 && (
-                      <span className="pointer-events-none absolute right-1 bottom-1 rounded bg-[var(--color-bg)]/80 px-1 py-0.5 text-[9px] leading-none font-bold text-[var(--color-muted)]">
-                        ×{count}
-                      </span>
-                    )}
-                  </div>
-                ))}
+                {sortedTracks.map(({ representative: a, members, color }) => {
+                  const expanded =
+                    expandedClusters.has(a.run_id) ||
+                    members.some(
+                      (member) =>
+                        member.run_id !== a.run_id &&
+                        member.run_id === selectedActivity?.run_id
+                    );
+                  return (
+                    <div key={a.run_id} className="track-cell relative">
+                      <TrackThumb
+                        activity={a}
+                        color={color}
+                        selected={selectedActivity?.run_id === a.run_id}
+                        onClick={handleSelectTrack}
+                      />
+                      {members.length > 1 && (
+                        <button
+                          type="button"
+                          aria-expanded={expanded}
+                          aria-label={
+                            locale === 'zh'
+                              ? `展开或收起 ${members.length} 条相似路线`
+                              : `Expand or collapse ${members.length} similar routes`
+                          }
+                          className="mt-1 block min-h-8 w-full rounded border border-[var(--color-border)] px-1 py-1 text-center text-xs text-[var(--color-muted)] hover:text-[var(--color-text)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--color-accent)]"
+                          onClick={() =>
+                            setExpandedClusters((old) => {
+                              const next = new Set(old);
+                              if (next.has(a.run_id)) next.delete(a.run_id);
+                              else next.add(a.run_id);
+                              return next;
+                            })
+                          }
+                        >
+                          {expanded ? '−' : '+'} {members.length}
+                        </button>
+                      )}
+                      {expanded && members.length > 1 && (
+                        <div
+                          role="group"
+                          aria-label={
+                            locale === 'zh'
+                              ? '相似路线成员'
+                              : 'Similar route members'
+                          }
+                          className="mt-1 flex flex-wrap gap-1"
+                        >
+                          {members.slice(1).map((member) => (
+                            <TrackThumb
+                              key={member.run_id}
+                              activity={member}
+                              color={getColor(member)}
+                              selected={
+                                selectedActivity?.run_id === member.run_id
+                              }
+                              onClick={handleSelectTrack}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
 
             {/* Legend + sort */}
-            {!clustering && clusteredTracks.length > 0 && (
+            {!clustering && currentClusters.length > 0 && (
               <div className="mt-4 flex flex-wrap items-center gap-4 border-t border-[var(--color-border)] pt-3 text-xs text-[var(--color-muted)]">
                 {sportFilter === null || sportFilter === 'Run' ? (
                   <>
@@ -704,7 +774,7 @@ export function TracksPage({
                 {null}
                 <div className="ml-auto flex items-center gap-1">
                   <span>
-                    {clusteredTracks.length}{' '}
+                    {withPolyline.length}{' '}
                     {locale === 'zh' ? '条路线' : 'routes'}
                   </span>
                   <span className="mx-1.5 text-[var(--color-border)]">·</span>

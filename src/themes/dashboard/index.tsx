@@ -224,6 +224,7 @@ function Dashboard() {
                     activities={geographyFiltered}
                     allActivities={activities}
                     selectedActivity={selectedActivity}
+                    onSelectActivity={selectActivity}
                     dark={dark}
                     onClearSelection={() => setSelectedActivity(null)}
                   />

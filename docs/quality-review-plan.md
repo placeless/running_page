@@ -48,7 +48,7 @@ Implemented locally on `review/batch-1-data-correctness`, based on Batch 0:
 - The old "Personal Best" card now explicitly describes nearby-distance
   **full activity** times, with actual recorded distance and ±1% tolerance,
   not verified event PBs or segment efforts. The component has been renamed
-  from \`PersonalBest\` to \`MatchedRunTimes\` to match its actual responsibility.
+  from `PersonalBest` to `MatchedRunTimes` to match its actual responsibility.
 - Private COROS sync now produces a disposable, ignored activity-ID list for
   aggregate source/FIT/manifest/SQLite/public reconciliation. The auditor
   reads SQLite without modifying it and logs no identifiers or locations.
@@ -60,6 +60,44 @@ Validation: synthetic Node domain tests on two timezones, Python reconciliation
 and importer tests, static checks and a production build. Live GitHub Actions
 sync and browser/visual tests remain outstanding; no private data was opened
 to validate this batch.
+
+### Batch 2 implementation status
+
+Implemented locally on `review/batch-2-resilience`, based on Batch 1:
+
+- **Shared loader:** Classic now consumes the same Suspense activity-data cache
+  and `resetActivityData()` retry path as Dashboard. No second fetch or stale
+  error cache remains inside its theme hook.
+- **Map isolation:** A map-specific React error boundary handles renderer
+  construction/import failures without replacing the full application. A
+  reusable non-WebGL route-list fallback preserves access to public activity
+  details; style failures retain Mapbox → CARTO → plain fallback and retry.
+  Maps without visible routes do not initialize WebGL.
+- **Redacted route geometry:** Map, thumbnail, route eligibility and worker
+  share validation of `route_segments`; each visible part is rendered as a
+  separate line and never bridged across a private gap. Invalid individual
+  segments no longer discard other valid parts.
+- **Grouping and selection:** The worker groups by interior geometry signature
+  and distance rather than endpoints alone. Clusters retain every activity
+  index; expanding a group exposes its members. Worker failure degrades to
+  individual, accessible tracks rather than an infinite loading state.
+- **Accessible state:** Document `lang` follows validated and persisted
+  Chinese/English preferences, including the pre-React HTML bootstrap;
+  the active orange sport filter uses a contrast-tested dark foreground,
+  and route controls, track thumb focus rings and touch targets are refined.
+- **Regression coverage:** Synthetic tests exercise geometry identity,
+  segmented GPS, grouped member retention, Classic retry, map fallback markup,
+  locale allowlisting, and WCAG contrast alongside the Batch 1 test suite.
+
+Browser smoke (Firefox 159 Headless): tested a temporary synthetic-route
+page with desktop 1280×900 dark and mobile 390×844 light/dark screenshots.
+Both color modes rendered legible initial layout and statistics, but the
+screenshots were taken **before** lazy WebGL and worker rendering completed.
+A forced WebGL-off screenshot was likewise captured while still loading.
+These are partial visual smoke checks, not proof of route/renderer recovery,
+finished map quality, keyboard navigation, or assistive technology behavior.
+The synthetic fixture and its temporary local servers were removed after QA.
+Real WebGL failure interaction and live provider error behavior remain untested.
 
 ## Ground rules
 
@@ -92,29 +130,29 @@ Priority means risk/impact, not implementation complexity. `confirmed` is
 supported by code inspection or a synthetic reproduction; `verify` requires
 runtime, policy or external validation.
 
-| Priority | Status | Finding and code ownership | Proposed correction |
-| --- | --- | --- | --- |
-| P1 | Confirmed behavior; exposure unverified | `run_page/coros_sync.py` reuses an authenticated `httpx.AsyncClient` for an API-provided FIT download URL, forwarding its token/cookie headers even for cross-origin requests | Validate HTTPS and allowed download hosts/redirects; separate the API client from the file transfer client and test rejected targets |
-| P1 | Confirmed design gap | `.github/workflows/run_data_sync.yml` has no concurrency lock around two writable Git repositories | Serialize sync jobs with a stable group and `cancel-in-progress: false`; test overlapping dispatches |
-| P1 | Confirmed guard bypass | `vite.config.ts` permits `RUNNING_ALLOW_UNSAFE_LOCAL_PREVIEW=1` to skip the activity JSON validator even during a production build | Fail closed in CI/production regardless of the variable; keep explicitly isolated local-only fixture previews |
-| P1 | Reproduced by synthetic input | `src/components/StatsCards.tsx` compares a historical full year with the prior year only through the current day-of-year | Historical complete-year vs complete-year; current-year year-to-date vs previous equivalent cutoff; leap-year fixtures |
-| P1 | Confirmed semantics | `src/utils/summary.ts` mixes strength-training duration into an all-sports average speed; `src/components/TracksPage.tsx` averages per-activity speeds instead of computing total distance / total running time | Shared activity-domain aggregation with explicitly scoped sport metrics |
-| P1 | Confirmed semantics | `src/components/PersonalBest.tsx` labels best full-activity times across broad distance bands as exact 5K/10K/HM/marathon PRs | Distinguish closest matching full activity from verified exact-distance effort; do not infer split PRs from redacted route data |
-| P2 | Reproduced by synthetic input | `StatsCards.tsx` relies on elapsed milliseconds for calendar-day streaks; DST creates false gaps | Pure LocalDate calendar arithmetic; exercise DST, year boundaries, leap days, and negative UTC offsets |
-| P2 | Reproduced by synthetic input | `src/themes/classic/hooks/useActivities.ts` has an independent failure cache unaffected by global Retry in `src/components/ErrorBoundary.tsx` | One shared data-loader/cache/retry contract across themes |
-| P2 | Reproduced by synthetic input | `src/components/TracksPage.tsx` ignores valid `route_segments` without sufficiently long `summary_polyline` | Use one route eligibility/decoding contract and render separate, unconnected segments |
-| P2 | Reproduced by synthetic input | `src/workers/clusterTracks.worker.ts` clusters routes using endpoints and coarse distance only, then hides all but one member | Preserve cluster membership and user access; assess geometry similarity if grouping is retained |
-| P2 | Confirmed error-boundary placement | `src/components/RouteMapCanvas.tsx` can throw during WebGL constructor setup inside a single app-wide error boundary | Map-local error boundary / fallback; no whole-page failure on no WebGL |
-| P2 | Confirmed | `src/utils/summary.ts` emits an undifferentiated `—` time bucket for all public date-only activities | Use date-only summaries and avoid asserting unavailable hourly detail |
-| P2 | Confirmed | `index.html` language is fixed to `en`; `src/core/hooks/useLocale.tsx` changes React state, not `html.lang` | Keep document language synchronized with locale and validate stored locale values |
-| P2 | Calculated | Selected running filter in `TracksPage.tsx` uses white on `#f97316` (~2.80:1), below WCAG AA 4.5:1 for ordinary text | Use tested dark foreground and add state/contrast checks |
-| P2 | Needs policy review | Old `gh-pages.yml` can cache original FIT, GPX and SQLite files and is not the production deployment path | Delete unused publish/cache workflow in this fork, or remove all raw-data cache paths if still supported |
-| P2 | Needs content inspection | Two checked-in `PNG_OUT/share_image_*.png` files are not covered by the private-graphics denylist | Inspect for personal route/location exposure; archive privately and untrack if necessary |
-| P3 | Measured bundles, not runtime | Mapbox and MapLibre are imported together inside `RouteMapCanvas.tsx`, though its parent is visibility-gated | Compare per-provider dynamic imports and renderer lifecycle against existing fallback before changing |
-| P3 | Confirmed duplication | `src/static/city.ts` is byte-identical to `src/themes/classic/static/city.ts` | Replace with a canonical module, then remove duplicate |
-| P3 | Confirmed dead path | `ContributionHeatmap.tsx` hard-codes `isGym = false`; its separate gym-month render branch cannot execute | Delete unreachable branch, unused color table/state and JSX after behavior comparison |
-| P3 | Confirmed | `package.json` CI script calls format and ESLint `--fix`, mutating the working tree while ostensibly validating | Separate `check`, `lint`, `test`, `build` from opt-in `format:fix`/`lint:fix` |
-| P3 | Confirmed | `CONTRIBUTING.md` contains only “Always welcome.”; generic upstream README conflicts in places with current Vercel/COROS fork architecture | Add a concise contributor guide and clearly label upstream vs fork-specific deployment documentation |
+| Priority | Status                                  | Finding and code ownership                                                                                                                                                                                      | Proposed correction                                                                                                                  |
+| -------- | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| P1       | Confirmed behavior; exposure unverified | `run_page/coros_sync.py` reuses an authenticated `httpx.AsyncClient` for an API-provided FIT download URL, forwarding its token/cookie headers even for cross-origin requests                                   | Validate HTTPS and allowed download hosts/redirects; separate the API client from the file transfer client and test rejected targets |
+| P1       | Confirmed design gap                    | `.github/workflows/run_data_sync.yml` has no concurrency lock around two writable Git repositories                                                                                                              | Serialize sync jobs with a stable group and `cancel-in-progress: false`; test overlapping dispatches                                 |
+| P1       | Confirmed guard bypass                  | `vite.config.ts` permits `RUNNING_ALLOW_UNSAFE_LOCAL_PREVIEW=1` to skip the activity JSON validator even during a production build                                                                              | Fail closed in CI/production regardless of the variable; keep explicitly isolated local-only fixture previews                        |
+| P1       | Reproduced by synthetic input           | `src/components/StatsCards.tsx` compares a historical full year with the prior year only through the current day-of-year                                                                                        | Historical complete-year vs complete-year; current-year year-to-date vs previous equivalent cutoff; leap-year fixtures               |
+| P1       | Confirmed semantics                     | `src/utils/summary.ts` mixes strength-training duration into an all-sports average speed; `src/components/TracksPage.tsx` averages per-activity speeds instead of computing total distance / total running time | Shared activity-domain aggregation with explicitly scoped sport metrics                                                              |
+| P1       | Confirmed semantics                     | `src/components/PersonalBest.tsx` labels best full-activity times across broad distance bands as exact 5K/10K/HM/marathon PRs                                                                                   | Distinguish closest matching full activity from verified exact-distance effort; do not infer split PRs from redacted route data      |
+| P2       | Reproduced by synthetic input           | `StatsCards.tsx` relies on elapsed milliseconds for calendar-day streaks; DST creates false gaps                                                                                                                | Pure LocalDate calendar arithmetic; exercise DST, year boundaries, leap days, and negative UTC offsets                               |
+| P2       | Reproduced by synthetic input           | `src/themes/classic/hooks/useActivities.ts` has an independent failure cache unaffected by global Retry in `src/components/ErrorBoundary.tsx`                                                                   | One shared data-loader/cache/retry contract across themes                                                                            |
+| P2       | Reproduced by synthetic input           | `src/components/TracksPage.tsx` ignores valid `route_segments` without sufficiently long `summary_polyline`                                                                                                     | Use one route eligibility/decoding contract and render separate, unconnected segments                                                |
+| P2       | Reproduced by synthetic input           | `src/workers/clusterTracks.worker.ts` clusters routes using endpoints and coarse distance only, then hides all but one member                                                                                   | Preserve cluster membership and user access; assess geometry similarity if grouping is retained                                      |
+| P2       | Confirmed error-boundary placement      | `src/components/RouteMapCanvas.tsx` can throw during WebGL constructor setup inside a single app-wide error boundary                                                                                            | Map-local error boundary / fallback; no whole-page failure on no WebGL                                                               |
+| P2       | Confirmed                               | `src/utils/summary.ts` emits an undifferentiated `—` time bucket for all public date-only activities                                                                                                            | Use date-only summaries and avoid asserting unavailable hourly detail                                                                |
+| P2       | Confirmed                               | `index.html` language is fixed to `en`; `src/core/hooks/useLocale.tsx` changes React state, not `html.lang`                                                                                                     | Keep document language synchronized with locale and validate stored locale values                                                    |
+| P2       | Calculated                              | Selected running filter in `TracksPage.tsx` uses white on `#f97316` (~2.80:1), below WCAG AA 4.5:1 for ordinary text                                                                                            | Use tested dark foreground and add state/contrast checks                                                                             |
+| P2       | Needs policy review                     | Old `gh-pages.yml` can cache original FIT, GPX and SQLite files and is not the production deployment path                                                                                                       | Delete unused publish/cache workflow in this fork, or remove all raw-data cache paths if still supported                             |
+| P2       | Needs content inspection                | Two checked-in `PNG_OUT/share_image_*.png` files are not covered by the private-graphics denylist                                                                                                               | Inspect for personal route/location exposure; archive privately and untrack if necessary                                             |
+| P3       | Measured bundles, not runtime           | Mapbox and MapLibre are imported together inside `RouteMapCanvas.tsx`, though its parent is visibility-gated                                                                                                    | Compare per-provider dynamic imports and renderer lifecycle against existing fallback before changing                                |
+| P3       | Confirmed duplication                   | `src/static/city.ts` is byte-identical to `src/themes/classic/static/city.ts`                                                                                                                                   | Replace with a canonical module, then remove duplicate                                                                               |
+| P3       | Confirmed dead path                     | `ContributionHeatmap.tsx` hard-codes `isGym = false`; its separate gym-month render branch cannot execute                                                                                                       | Delete unreachable branch, unused color table/state and JSX after behavior comparison                                                |
+| P3       | Confirmed                               | `package.json` CI script calls format and ESLint `--fix`, mutating the working tree while ostensibly validating                                                                                                 | Separate `check`, `lint`, `test`, `build` from opt-in `format:fix`/`lint:fix`                                                        |
+| P3       | Confirmed                               | `CONTRIBUTING.md` contains only “Always welcome.”; generic upstream README conflicts in places with current Vercel/COROS fork architecture                                                                      | Add a concise contributor guide and clearly label upstream vs fork-specific deployment documentation                                 |
 
 ## Batches and acceptance criteria
 

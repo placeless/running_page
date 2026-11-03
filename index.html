@@ -33,6 +33,17 @@
           document.documentElement.classList.add('dark');
           document.documentElement.setAttribute('data-theme', 'dark');
         }
+        // Respect the same allowlist as LocaleProvider before React hydrates.
+        try {
+          var initialLocale = localStorage.getItem('locale');
+          if (initialLocale !== 'zh' && initialLocale !== 'en') {
+            initialLocale = 'en';
+          }
+          document.documentElement.lang =
+            initialLocale === 'zh' ? 'zh-CN' : 'en';
+        } catch (e) {
+          document.documentElement.lang = 'en';
+        }
       })();
     </script>
     <style>

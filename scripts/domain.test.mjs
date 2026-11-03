@@ -1,44 +1,8 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
 import { test } from 'node:test';
-import { fileURLToPath } from 'node:url';
-import ts from 'typescript';
+import { createTypeScriptLoader } from './test-utils/load-typescript.mjs';
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const loaded = new Map();
-
-// Compile pure domain TS modules in memory, compatible with Node 20 and CI.
-function loadSource(relative) {
-  const filename = path.resolve(
-    root,
-    relative.endsWith('.ts') ? relative : relative + '.ts'
-  );
-  if (loaded.has(filename)) return loaded.get(filename).exports;
-  const code = ts.transpileModule(readFileSync(filename, 'utf8'), {
-    fileName: filename,
-    compilerOptions: {
-      module: ts.ModuleKind.CommonJS,
-      target: ts.ScriptTarget.ES2020,
-    },
-  }).outputText;
-  const result = { exports: {} };
-  loaded.set(filename, result);
-  const require = (specifier) => {
-    if (!specifier.startsWith('.'))
-      throw new Error(
-        'Unexpected runtime dependency in pure domain: ' + specifier
-      );
-    return loadSource(path.resolve(path.dirname(filename), specifier));
-  };
-  new Function('require', 'module', 'exports', code)(
-    require,
-    result,
-    result.exports
-  );
-  return result.exports;
-}
-
+const loadSource = createTypeScriptLoader();
 const calendar = loadSource('src/core/domain/calendar');
 const metrics = loadSource('src/core/domain/metrics');
 const periods = loadSource('src/core/domain/periods');

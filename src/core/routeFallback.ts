@@ -1,4 +1,4 @@
-import polyline from '@mapbox/polyline';
+import { decodedRouteSegments } from './routeGeometry';
 
 type MappedActivity = {
   start_date_local: string;
@@ -33,27 +33,7 @@ export const hasRoute = (activity: MappedActivity): boolean => {
 };
 
 const validateRoute = (activity: MappedActivity): boolean => {
-  const candidates =
-    activity.route_segments ??
-    (activity.summary_polyline ? [activity.summary_polyline] : []);
-  if (!candidates.length) return false;
-  try {
-    return candidates.some((encoded) => {
-      const points = polyline.decode(encoded);
-      return (
-        points.length >= 2 &&
-        points.every(
-          ([lat, lng]) =>
-            Number.isFinite(lat) &&
-            Number.isFinite(lng) &&
-            Math.abs(lat) <= 90 &&
-            Math.abs(lng) <= 180
-        )
-      );
-    });
-  } catch {
-    return false;
-  }
+  return decodedRouteSegments(activity).length > 0;
 };
 
 /** Choose a route for display without copying it into the selected activity. */
